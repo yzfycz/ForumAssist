@@ -51,7 +51,9 @@ class ForumClient:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('status') == 1:
-                    return result.get('data', {}).get('forumlist', [])
+                    # 论坛列表在 message 中，不是 data.forumlist
+                    forum_list = result.get('message', [])
+                    return forum_list
 
         except Exception as e:
             print(f"获取论坛列表失败: {e}")
@@ -92,7 +94,10 @@ class ForumClient:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('status') == 1:
-                    return result.get('data', {}).get('threadlist', [])
+                    # 首页内容在 message.threadlist 中，不是 data.threadlist
+                    message = result.get('message', {})
+                    thread_list = message.get('threadlist', []) if isinstance(message, dict) else []
+                    return thread_list
 
         except Exception as e:
             print(f"获取首页内容失败: {e}")
@@ -135,10 +140,13 @@ class ForumClient:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('status') == 1:
-                    data = result.get('data', {})
+                    message = result.get('message', {})
                     return {
-                        "threadlist": data.get('threadlist', []),
-                        "pagination": data.get('pagination', {})
+                        "threadlist": message.get('threadlist', []),
+                        "pagination": {
+                            "page": message.get('page', 1),
+                            "totalpage": message.get('totalpage', 1)
+                        }
                     }
 
         except Exception as e:
@@ -182,11 +190,12 @@ class ForumClient:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('status') == 1:
-                    data = result.get('data', {})
+                    # 帖子详情数据在 message 中，不是 data 中
+                    message = result.get('message', {})
                     return {
-                        "postlist": data.get('postlist', []),
-                        "pagination": data.get('pagination', {}),
-                        "thread_info": data.get('thread', {})
+                        "postlist": message.get('postlist', []),
+                        "pagination": message.get('pagination', {}),
+                        "thread_info": message.get('thread', {})
                     }
 
         except Exception as e:
@@ -230,10 +239,11 @@ class ForumClient:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('status') == 1:
-                    data = result.get('data', {})
+                    # 用户帖子数据在 message 中，不是 data 中
+                    message = result.get('message', {})
                     return {
-                        "threadlist": data.get('threadlist', []),
-                        "pagination": data.get('pagination', {})
+                        "threadlist": message.get('threadlist', []),
+                        "pagination": message.get('pagination', {})
                     }
 
         except Exception as e:
@@ -277,10 +287,11 @@ class ForumClient:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('status') == 1:
-                    data = result.get('data', {})
+                    # 用户回复数据在 message 中，不是 data 中
+                    message = result.get('message', {})
                     return {
-                        "postlist": data.get('postlist', []),
-                        "pagination": data.get('pagination', {})
+                        "postlist": message.get('postlist', []),
+                        "pagination": message.get('pagination', {})
                     }
 
         except Exception as e:

@@ -53,10 +53,27 @@ class AuthenticationManager:
                     # 登录成功，保存会话
                     self.active_sessions[forum_name] = session
 
-                    # 获取用户信息
-                    user_info = self._get_user_info(session, forum_url, result.get('uid'))
-                    if user_info:
-                        self.user_info[forum_name] = user_info
+                    # 用户ID在 message.user.uid 中
+                    user_data = result.get('message', {}).get('user', {})
+                    uid = user_data.get('uid')
+
+                    # 如果从登录响应中获取到了用户信息，直接使用
+                    if user_data and uid:
+                        # 合并论坛配置和用户信息
+                        self.user_info[forum_name] = {
+                            **forum_config,  # 包含url, username, password等
+                            **user_data      # 包含uid, nickname等
+                        }
+                    else:
+                        # 尝试通过API获取用户信息
+                        if uid:
+                            user_info = self._get_user_info(session, forum_url, uid)
+                            if user_info:
+                                # 合并论坛配置和用户信息
+                                self.user_info[forum_name] = {
+                                    **forum_config,  # 包含url, username, password等
+                                    **user_info     # 包含uid, nickname等
+                                }
 
                     return True
                 else:
@@ -144,7 +161,8 @@ class AuthenticationManager:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('status') == 1:
-                    return result.get('data', {})
+                    # 用户信息在 message 中，不是 data 中
+                    return result.get('message', {})
         except Exception as e:
             print(f"获取用户信息失败: {e}")
 

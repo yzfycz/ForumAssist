@@ -340,7 +340,7 @@ class AccountEditDialog(wx.Dialog):
             self.password_ctrl.SetFocus()
             return None
 
-        # 测试登录API
+        # 测试登录API并获取用户信息
         if not self.test_login(forum_name, username, password):
             return None
 
@@ -350,12 +350,15 @@ class AccountEditDialog(wx.Dialog):
         else:
             url = "http://www.zd.hk/"  # 默认URL
 
+        # 使用从API获取的真实昵称
+        nickname = getattr(self, 'user_info', {}).get('nickname', username)
+
         return {
             'name': forum_name,
             'url': url,
             'username': username,
             'password': password,
-            'nickname': username  # 使用用户名作为昵称
+            'nickname': nickname
         }
 
     def test_login(self, forum_name, username, password):
