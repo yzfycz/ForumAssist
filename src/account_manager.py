@@ -386,9 +386,16 @@ class AccountEditDialog(wx.Dialog):
 
                 if response.status_code == 200:
                     result = response.json()
+                    print(f"登录响应: {result}")  # 调试信息
+
                     if result.get('status') == 1:
                         # 登录成功，获取用户信息
-                        uid = result.get('uid')
+                        # 用户ID在 message.user.uid 中
+                        user_data = result.get('message', {}).get('user', {})
+                        uid = user_data.get('uid')
+                        username = user_data.get('username', username)
+                        print(f"登录成功，用户ID: {uid}, 用户名: {username}")  # 调试信息
+
                         if uid:
                             # 获取用户详细信息
                             user_info_url = f"{BASE_URL.rstrip('/')}/user-index.htm"
@@ -397,20 +404,59 @@ class AccountEditDialog(wx.Dialog):
                                 "format": "json"
                             }
 
-                            user_response = session.get(user_info_url, params=user_params, timeout=10)
-                            if user_response.status_code == 200:
-                                user_result = user_response.json()
-                                if user_result.get('status') == 1:
-                                    user_data = user_result.get('data', {})
-                                    # 缓存用户信息以备后用
+                            try:
+                                user_response = session.get(user_info_url, params=user_params, timeout=10)
+                                print(f"用户信息响应状态: {user_response.status_code}")  # 调试信息
+
+                                if user_response.status_code == 200:
+                                    user_result = user_response.json()
+                                    print(f"用户信息响应: {user_result}")  # 调试信息
+
+                                    if user_result.get('status') == 1:
+                                        # 用户信息在 message 中，不是 data 中
+                                        user_detail_data = user_result.get('message', {})
+                                        # 缓存用户信息以备后用
+                                        self.user_info = {
+                                            'uid': uid,
+                                            'username': user_detail_data.get('username', username),
+                                            'nickname': user_detail_data.get('nickname', username)
+                                        }
+                                        print("用户信息获取成功")  # 调试信息
+                                        return True
+                                    else:
+                                        print(f"用户信息获取失败: {user_result.get('message', '未知错误')}")
+                                        # 即使用户信息获取失败，只要登录成功就允许添加账户
+                                        self.user_info = {
+                                            'uid': uid,
+                                            'username': username,
+                                            'nickname': username
+                                        }
+                                        return True
+                                else:
+                                    print(f"用户信息请求失败: HTTP {user_response.status_code}")
+                                    # 即使用户信息获取失败，只要登录成功就允许添加账户
                                     self.user_info = {
                                         'uid': uid,
-                                        'username': user_data.get('username', username),
-                                        'nickname': user_data.get('nickname', username)
+                                        'username': username,
+                                        'nickname': username
                                     }
                                     return True
+                            except Exception as e:
+                                print(f"获取用户信息时发生异常: {e}")
+                                # 即使用户信息获取失败，只要登录成功就允许添加账户
+                                self.user_info = {
+                                    'uid': uid,
+                                    'username': username,
+                                    'nickname': username
+                                }
+                                return True
+                        else:
+                            print("登录成功但未获取到用户ID")
+                            wx.MessageBox("登录成功但未获取到用户信息", "警告", wx.OK | wx.ICON_WARNING)
+                            return False
                     else:
                         error_msg = result.get('message', '登录失败')
+                        print(f"登录失败: {error_msg}")
                         wx.MessageBox(f"登录失败: {error_msg}", "错误", wx.OK | wx.ICON_ERROR)
                         return False
                 else:
