@@ -5,7 +5,7 @@
 
 # 争渡论坛API配置
 APPKEY = "24b22d1468"
-SECKEY = "24b22d1468"
+SECKEY = "cb433ea43a"
 BASE_URL = "http://www.zd.hk/"
 
 # 论坛信息

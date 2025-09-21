@@ -34,11 +34,6 @@ class MainFrame(wx.Frame):
         # 获取账户列表
         self.accounts = self.config_manager.get_forum_list()
 
-        # 如果没有账户，显示账户管理界面
-        if not self.accounts:
-            self.show_account_manager()
-            return
-
         # 创建主窗口
         super().__init__(None, title="论坛助手", size=(1024, 768))
 
@@ -49,8 +44,12 @@ class MainFrame(wx.Frame):
         self.create_ui()
         self.create_menu()
 
-        # 显示账户选择界面
-        self.show_account_selection()
+        # 如果没有账户，显示账户管理界面
+        if not self.accounts:
+            self.show_account_manager()
+        else:
+            # 显示账户选择界面
+            self.show_account_selection()
 
     def create_ui(self):
         """创建用户界面"""
