@@ -50,9 +50,8 @@ class AccountManager(wx.Dialog):
         # 创建列表控件
         self.list_ctrl = wx.ListCtrl(parent, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self.list_ctrl.InsertColumn(0, "论坛名称", width=150)
-        self.list_ctrl.InsertColumn(1, "论坛地址", width=200)
-        self.list_ctrl.InsertColumn(2, "用户名", width=150)
-        self.list_ctrl.InsertColumn(3, "昵称", width=150)
+        self.list_ctrl.InsertColumn(1, "用户名", width=200)
+        self.list_ctrl.InsertColumn(2, "昵称", width=150)
 
         sizer.Add(self.list_ctrl, 1, wx.ALL | wx.EXPAND, 10)
 
@@ -119,9 +118,8 @@ class AccountManager(wx.Dialog):
 
         for i, account in enumerate(self.accounts):
             self.list_ctrl.InsertItem(i, account.get('name', ''))
-            self.list_ctrl.SetItem(i, 1, account.get('url', ''))
-            self.list_ctrl.SetItem(i, 2, account.get('username', ''))
-            self.list_ctrl.SetItem(i, 3, account.get('nickname', ''))
+            self.list_ctrl.SetItem(i, 1, account.get('username', ''))
+            self.list_ctrl.SetItem(i, 2, account.get('nickname', account.get('username', '')))
 
     def on_new_account(self, event):
         """新建账户"""
