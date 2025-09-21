@@ -264,11 +264,11 @@ class AccountEditDialog(wx.Dialog):
 
         # 用户名
         username_label = wx.StaticText(parent, label="争渡好或邮箱:")
-        self.username_ctrl = wx.TextCtrl(parent)
+        self.username_ctrl = wx.TextCtrl(parent, style=wx.TE_PROCESS_ENTER)
 
         # 密码
         password_label = wx.StaticText(parent, label="密码:")
-        self.password_ctrl = wx.TextCtrl(parent, style=wx.TE_PASSWORD)
+        self.password_ctrl = wx.TextCtrl(parent, style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER)
 
         # 添加到布局
         grid_sizer = wx.FlexGridSizer(3, 2, 10, 10)
