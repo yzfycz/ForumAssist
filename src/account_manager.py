@@ -5,6 +5,8 @@
 """
 
 import wx
+import requests
+from config.api_config import APPKEY, SECKEY, BASE_URL
 
 class AccountManager(wx.Dialog):
     """账户管理器"""
@@ -255,38 +257,27 @@ class AccountEditDialog(wx.Dialog):
 
     def create_input_fields(self, parent, sizer):
         """创建输入字段"""
-        # 论坛名称
+        # 论坛名称（组合框）
         name_label = wx.StaticText(parent, label="论坛名称:")
-        self.name_ctrl = wx.TextCtrl(parent)
+        forum_choices = ["争渡论坛", "自定义"]
+        self.name_combo = wx.ComboBox(parent, choices=forum_choices, style=wx.CB_READONLY)
         if self.is_edit:
-            self.name_ctrl.Disable()  # 编辑模式下禁止修改名称
-
-        # 论坛地址
-        url_label = wx.StaticText(parent, label="论坛地址:")
-        self.url_ctrl = wx.TextCtrl(parent)
-        self.url_ctrl.SetValue("http://www.zd.hk/")
+            self.name_combo.Disable()  # 编辑模式下禁止修改名称
 
         # 用户名
-        username_label = wx.StaticText(parent, label="用户名:")
+        username_label = wx.StaticText(parent, label="争渡好或邮箱:")
         self.username_ctrl = wx.TextCtrl(parent)
 
         # 密码
         password_label = wx.StaticText(parent, label="密码:")
         self.password_ctrl = wx.TextCtrl(parent, style=wx.TE_PASSWORD)
 
-        # 昵称
-        nickname_label = wx.StaticText(parent, label="昵称:")
-        self.nickname_ctrl = wx.TextCtrl(parent)
-
         # 添加到布局
-        grid_sizer = wx.FlexGridSizer(5, 2, 10, 10)
+        grid_sizer = wx.FlexGridSizer(3, 2, 10, 10)
         grid_sizer.AddGrowableCol(1, 1)
 
         grid_sizer.Add(name_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
-        grid_sizer.Add(self.name_ctrl, 0, wx.EXPAND)
-
-        grid_sizer.Add(url_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
-        grid_sizer.Add(self.url_ctrl, 0, wx.EXPAND)
+        grid_sizer.Add(self.name_combo, 0, wx.EXPAND)
 
         grid_sizer.Add(username_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
         grid_sizer.Add(self.username_ctrl, 0, wx.EXPAND)
@@ -294,15 +285,23 @@ class AccountEditDialog(wx.Dialog):
         grid_sizer.Add(password_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
         grid_sizer.Add(self.password_ctrl, 0, wx.EXPAND)
 
-        grid_sizer.Add(nickname_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
-        grid_sizer.Add(self.nickname_ctrl, 0, wx.EXPAND)
-
         sizer.Add(grid_sizer, 1, wx.ALL | wx.EXPAND, 20)
 
     def create_buttons(self, parent, sizer):
         """创建按钮"""
-        button_sizer = self.CreateButtonSizer(wx.OK | wx.CANCEL)
-        sizer.Add(button_sizer, 0, wx.ALL | wx.EXPAND, 10)
+        button_panel = wx.Panel(parent)
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # 创建按钮
+        ok_button = wx.Button(button_panel, id=wx.ID_OK, label="确定")
+        cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消")
+
+        # 添加按钮到布局
+        button_sizer.Add(ok_button, 0, wx.ALL, 5)
+        button_sizer.Add(cancel_button, 0, wx.ALL, 5)
+
+        button_panel.SetSizer(button_sizer)
+        sizer.Add(button_panel, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
     def bind_events(self):
         """绑定事件"""
@@ -310,41 +309,31 @@ class AccountEditDialog(wx.Dialog):
         self.Bind(wx.EVT_BUTTON, self.on_cancel, id=wx.ID_CANCEL)
 
         # 文本框回车事件
-        self.name_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_ok)
         self.username_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_ok)
         self.password_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_ok)
-        self.nickname_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_ok)
 
     def load_account_data(self):
         """加载账户数据"""
         if self.account:
-            self.name_ctrl.SetValue(self.account.get('name', ''))
-            self.url_ctrl.SetValue(self.account.get('url', ''))
+            forum_name = self.account.get('name', '')
+            self.name_combo.SetValue(forum_name)
             self.username_ctrl.SetValue(self.account.get('username', ''))
             self.password_ctrl.SetValue(self.account.get('password', ''))
-            self.nickname_ctrl.SetValue(self.account.get('nickname', ''))
 
     def get_account_data(self):
-        """获取账户数据"""
-        name = self.name_ctrl.GetValue().strip()
-        url = self.url_ctrl.GetValue().strip()
+        """获取账户数据并验证登录"""
+        forum_name = self.name_combo.GetValue().strip()
         username = self.username_ctrl.GetValue().strip()
         password = self.password_ctrl.GetValue().strip()
-        nickname = self.nickname_ctrl.GetValue().strip()
 
         # 验证必填字段
-        if not name:
-            wx.MessageBox("请输入论坛名称", "错误", wx.OK | wx.ICON_ERROR)
-            self.name_ctrl.SetFocus()
-            return None
-
-        if not url:
-            wx.MessageBox("请输入论坛地址", "错误", wx.OK | wx.ICON_ERROR)
-            self.url_ctrl.SetFocus()
+        if not forum_name:
+            wx.MessageBox("请选择论坛名称", "错误", wx.OK | wx.ICON_ERROR)
+            self.name_combo.SetFocus()
             return None
 
         if not username:
-            wx.MessageBox("请输入用户名", "错误", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox("请输入争渡好或邮箱", "错误", wx.OK | wx.ICON_ERROR)
             self.username_ctrl.SetFocus()
             return None
 
@@ -353,18 +342,89 @@ class AccountEditDialog(wx.Dialog):
             self.password_ctrl.SetFocus()
             return None
 
-        if not nickname:
-            wx.MessageBox("请输入昵称", "错误", wx.OK | wx.ICON_ERROR)
-            self.nickname_ctrl.SetFocus()
+        # 测试登录API
+        if not self.test_login(forum_name, username, password):
             return None
 
+        # 根据论坛名称确定URL
+        if forum_name == "争渡论坛":
+            url = BASE_URL
+        else:
+            url = "http://www.zd.hk/"  # 默认URL
+
         return {
-            'name': name,
+            'name': forum_name,
             'url': url,
             'username': username,
             'password': password,
-            'nickname': nickname
+            'nickname': username  # 使用用户名作为昵称
         }
+
+    def test_login(self, forum_name, username, password):
+        """测试登录API"""
+        try:
+            # 创建临时会话进行登录测试
+            session = requests.Session()
+
+            # 确定登录URL
+            if forum_name == "争渡论坛":
+                login_url = f"{BASE_URL.rstrip('/')}/user-login.htm"
+            else:
+                login_url = "http://www.zd.hk/user-login.htm"
+
+            # 准备登录数据
+            login_data = {
+                "email": username,
+                "password": password,
+                "appkey": APPKEY,
+                "seckey": SECKEY,
+                "format": "json"
+            }
+
+            # 显示等待提示
+            wx.BeginBusyCursor()
+            try:
+                response = session.post(login_url, data=login_data, timeout=10)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('status') == 1:
+                        # 登录成功，获取用户信息
+                        uid = result.get('uid')
+                        if uid:
+                            # 获取用户详细信息
+                            user_info_url = f"{BASE_URL.rstrip('/')}/user-index.htm"
+                            user_params = {
+                                "uid": uid,
+                                "format": "json"
+                            }
+
+                            user_response = session.get(user_info_url, params=user_params, timeout=10)
+                            if user_response.status_code == 200:
+                                user_result = user_response.json()
+                                if user_result.get('status') == 1:
+                                    user_data = user_result.get('data', {})
+                                    # 缓存用户信息以备后用
+                                    self.user_info = {
+                                        'uid': uid,
+                                        'username': user_data.get('username', username),
+                                        'nickname': user_data.get('nickname', username)
+                                    }
+                                    return True
+                    else:
+                        error_msg = result.get('message', '登录失败')
+                        wx.MessageBox(f"登录失败: {error_msg}", "错误", wx.OK | wx.ICON_ERROR)
+                        return False
+                else:
+                    wx.MessageBox(f"网络错误: HTTP {response.status_code}", "错误", wx.OK | wx.ICON_ERROR)
+                    return False
+            finally:
+                wx.EndBusyCursor()
+
+        except Exception as e:
+            wx.EndBusyCursor()
+            wx.MessageBox(f"连接失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+            return False
 
     def on_ok(self, event):
         """确定按钮"""
