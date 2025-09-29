@@ -19,14 +19,8 @@ pip install -r requirements.txt
 
 ### Testing and Debugging
 ```bash
-# Test specific API endpoints (create debug scripts as needed)
-python debug_api_endpoints.py
-
-# Test data formatting logic
-python test_data_formatting.py
-
-# Test pagination functionality
-python test_pagination.py
+# Create temporary debug scripts as needed for API testing
+# All temporary test files should be deleted after use
 ```
 
 ### Development Setup
@@ -70,7 +64,7 @@ mypy src/ --ignore-missing-imports
 
 **State Restoration**: Backspace navigation saves previous state (content_type, selected_index, tid) and restores both window title and focus position.
 
-**Data Transformation**: User posts/threads APIs return `threadlist` format requiring conversion to displayable format. Must extract `thread` and `post` objects appropriately.
+**Data Transformation**: User content APIs return `threadlist` format requiring conversion to displayable format. Must extract `thread` and `post` objects appropriately. For user posts, each item contains both thread info (subject, views, etc.) and post info (dateline_fmt, message, etc.).
 
 **Accessibility Requirements**: 100% keyboard navigation with proper focus management, screen reader friendly labels, and logical tab order.
 
@@ -127,26 +121,42 @@ Accounts stored in `config/forums.ini` (auto-created):
 - Validate API response parsing with real forum data
 - Check accessibility with screen readers when possible
 
-### Recent Fixes (2025-09-21)
-1. **HTML Content Display Enhancement**
-   - Added `clean_html_tags` method to filter HTML tags while preserving line breaks
-   - Converts `<br>`, `<p>`, `<div>` tags to appropriate line breaks
-   - Handles HTML entities (`&nbsp;`, `&lt;`, `&gt;`, etc.)
-   - Maintains paragraph structure and text formatting in post details
+### Recent Fixes (2025-09-29)
+1. **User Content Display Fixes**
+   - Fixed "我的发表" and "我的回复" not displaying content due to pagination data extraction errors
+   - Corrected `get_user_posts` and `get_user_threads` methods to extract pagination info from `message.page` and `message.totalpage` instead of `message.pagination`
+   - Fixed data transformation logic in `load_my_threads` method - items are direct thread objects, not nested
+   - Unified data format consistency between user threads and posts
 
-2. **Pagination Controls Visibility**
-   - Optimized pagination control display format
-   - Simplified page jump text: "第X页/共Y页 (回车跳转)"
-   - Set multi-column display to prevent text truncation
-   - Ensured pagination controls are always visible per design requirements
+2. **Home Content Pagination Support**
+   - Added pagination support to "最新发表" and "最新回复" features
+   - Enhanced `get_home_content` method with page parameter support
+   - Updated return structure to include pagination information
+   - Added `current_orderby` state management for sorting context
 
-3. **Focus Restoration Improvements**
-   - Fixed interference from pagination controls on focus restoration
-   - Exclude pagination control items (negative TID values) during focus lookup
-   - Enhanced dual lookup mechanism: TID-based search with index fallback
-   - Improved backspace navigation to correctly restore focus to previously opened posts
+3. **Pagination Logic Enhancement**
+   - Fixed user posts handling in all pagination methods (next, previous, jump)
+   - Added home content type support to all pagination handlers
+   - Improved data format conversion for threadlist-based user content
+   - Maintained consistent pagination behavior across all content types
+
+4. **List Display Format Overhaul (2025-09-29)**
+   - Implemented new comprehensive display format for all list types: `标题 作者:用户名;浏览:数量;板块:板块名;发表时间:时间;回复:数量;回复时间:时间;最后回复:用户名`
+   - Changed from multi-column to single-column display (2000px width) to accommodate full information
+   - Fixed "我的回复" data transformation to properly extract last username from `post.username` or fallback to `thread.lastusername`
+   - Fixed column index errors in pagination controls for single-column layout
+   - Enhanced information density while maintaining accessibility
 
 ### Key Implementation Details
-- **HTML Processing**: Smart HTML tag removal that preserves document structure
-- **Focus Management**: Handles pagination control interference in list navigation
-- **UI Consistency**: Pagination controls follow the 4-item design specification
+- **Data Structure Consistency**: All user content methods now return unified `threadlist` format
+- **Complete Pagination Coverage**: All content types now support full pagination functionality (我的发表: 58 pages, 我的回复: 116 pages)
+- **State Management**: Added sorting context tracking for home content navigation
+- **Backward Compatibility**: Maintained existing UI patterns while enhancing functionality
+- **Display Format**: Standardized information-rich display format across all list types
+- **Performance**: Optimized column width and data extraction for complete information display
+
+### Testing and Validation
+- Verified pagination functionality across all content types with real user data
+- Tested data transformation logic for proper field extraction and display
+- Validated new display format shows complete information without truncation
+- Confirmed accessibility with keyboard navigation and screen reader compatibility

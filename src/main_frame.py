@@ -436,15 +436,17 @@ class MainFrame(wx.Frame):
 
     def load_latest_threads_and_restore_focus(self):
         """加载最新发表并恢复焦点"""
-        threads = self.forum_client.get_home_content(self.current_forum, "latest")
+        result = self.forum_client.get_home_content(self.current_forum, "latest")
         self.SetTitle(f"最新发表-{self.get_user_nickname()}-论坛助手")
-        self.display_threads_and_restore_focus(threads, content_type='home_content')
+        self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
+        self.current_orderby = 'latest'
 
     def load_latest_replies_and_restore_focus(self):
         """加载最新回复并恢复焦点"""
-        threads = self.forum_client.get_home_content(self.current_forum, "lastpost")
+        result = self.forum_client.get_home_content(self.current_forum, "lastpost")
         self.SetTitle(f"最新回复-{self.get_user_nickname()}-论坛助手")
-        self.display_threads_and_restore_focus(threads, content_type='home_content')
+        self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
+        self.current_orderby = 'lastpost'
 
     def load_my_threads_and_restore_focus(self):
         """加载我的发表并恢复焦点"""
@@ -454,20 +456,19 @@ class MainFrame(wx.Frame):
             if uid:
                 self.current_uid = uid
                 result = self.forum_client.get_user_threads(self.current_forum, uid)
-                # API返回的是threadlist格式，需要转换为display_threads期望的格式
+                # API返回的是threadlist格式，每个item本身就是thread对象
                 threadlist = result.get('threadlist', [])
                 formatted_threads = []
                 for item in threadlist:
-                    thread_info = item.get('thread', {})
-                    if thread_info:
+                    if item:
                         formatted_thread = {
-                            'tid': thread_info.get('tid'),
-                            'subject': thread_info.get('subject', ''),
-                            'username': thread_info.get('username', ''),
-                            'uid': thread_info.get('uid'),
-                            'dateline_fmt': thread_info.get('dateline_fmt', ''),
-                            'views': thread_info.get('views', 0),
-                            'posts': thread_info.get('posts', 0),
+                            'tid': item.get('tid'),
+                            'subject': item.get('subject', ''),
+                            'username': item.get('username', ''),
+                            'uid': item.get('uid'),
+                            'dateline_fmt': item.get('dateline_fmt', ''),
+                            'views': item.get('views', 0),
+                            'posts': item.get('posts', 0),
                             'forumname': item.get('forumname', '')
                         }
                         formatted_threads.append(formatted_thread)
@@ -491,16 +492,18 @@ class MainFrame(wx.Frame):
                     thread_info = item.get('thread', {})
                     post_info = item.get('post', {})
                     if thread_info and post_info:
+                        # 构造显示为回复的格式，按照新的显示格式要求
                         formatted_thread = {
                             'tid': thread_info.get('tid'),
                             'subject': thread_info.get('subject', ''),
                             'username': thread_info.get('username', ''),
                             'uid': thread_info.get('uid'),
-                            'dateline_fmt': post_info.get('dateline_fmt', ''),
+                            'dateline_fmt': thread_info.get('dateline_fmt', ''),  # 帖子发表时间
                             'views': thread_info.get('views', 0),
                             'posts': thread_info.get('posts', 0),
                             'forumname': item.get('forumname', ''),
-                            'message': post_info.get('message', '')
+                            'lastpost_fmt': post_info.get('dateline_fmt', ''),  # 回复时间作为最后回复时间
+                            'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')  # 优先使用回复者，否则使用帖子最后回复者
                         }
                         formatted_threads.append(formatted_thread)
 
@@ -760,13 +763,17 @@ class MainFrame(wx.Frame):
 
     def load_latest_threads(self):
         """加载最新发表"""
-        threads = self.forum_client.get_home_content(self.current_forum, "latest")
-        self.display_threads(threads, content_type='home_content')
+        result = self.forum_client.get_home_content(self.current_forum, "latest")
+        self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
+        # 保存当前排序方式，用于分页
+        self.current_orderby = 'latest'
 
     def load_latest_replies(self):
         """加载最新回复"""
-        threads = self.forum_client.get_home_content(self.current_forum, "lastpost")
-        self.display_threads(threads, content_type='home_content')
+        result = self.forum_client.get_home_content(self.current_forum, "lastpost")
+        self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
+        # 保存当前排序方式，用于分页
+        self.current_orderby = 'lastpost'
 
     def load_my_threads(self):
         """加载我的发表"""
@@ -776,22 +783,21 @@ class MainFrame(wx.Frame):
             if uid:
                 self.current_uid = uid
                 result = self.forum_client.get_user_threads(self.current_forum, uid)
-                # API返回的是threadlist格式，需要转换为display_threads期望的格式
+                # API返回的是threadlist格式，每个item本身就是thread对象
                 threadlist = result.get('threadlist', [])
-                # 为每个thread项目添加tid（从thread.tid中获取）
+                # 直接使用item作为thread对象
                 formatted_threads = []
                 for item in threadlist:
-                    thread_info = item.get('thread', {})
-                    if thread_info:
+                    if item:
                         # 构造display_threads期望的格式
                         formatted_thread = {
-                            'tid': thread_info.get('tid'),
-                            'subject': thread_info.get('subject', ''),
-                            'username': thread_info.get('username', ''),
-                            'uid': thread_info.get('uid'),
-                            'dateline_fmt': thread_info.get('dateline_fmt', ''),
-                            'views': thread_info.get('views', 0),
-                            'posts': thread_info.get('posts', 0),
+                            'tid': item.get('tid'),
+                            'subject': item.get('subject', ''),
+                            'username': item.get('username', ''),
+                            'uid': item.get('uid'),
+                            'dateline_fmt': item.get('dateline_fmt', ''),
+                            'views': item.get('views', 0),
+                            'posts': item.get('posts', 0),
                             'forumname': item.get('forumname', '')
                         }
                         formatted_threads.append(formatted_thread)
@@ -813,18 +819,18 @@ class MainFrame(wx.Frame):
                     thread_info = item.get('thread', {})
                     post_info = item.get('post', {})
                     if thread_info and post_info:
-                        # 构造显示为回复的格式
+                        # 构造显示为回复的格式，按照新的显示格式要求
                         formatted_thread = {
                             'tid': thread_info.get('tid'),
                             'subject': thread_info.get('subject', ''),
                             'username': thread_info.get('username', ''),
                             'uid': thread_info.get('uid'),
-                            'dateline_fmt': post_info.get('dateline_fmt', ''),  # 使用回复时间
+                            'dateline_fmt': thread_info.get('dateline_fmt', ''),  # 帖子发表时间
                             'views': thread_info.get('views', 0),
                             'posts': thread_info.get('posts', 0),
                             'forumname': item.get('forumname', ''),
-                            # 添加回复内容预览
-                            'message': post_info.get('message', '')
+                            'lastpost_fmt': post_info.get('dateline_fmt', ''),  # 回复时间作为最后回复时间
+                            'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')  # 优先使用回复者，否则使用帖子最后回复者
                         }
                         formatted_threads.append(formatted_thread)
 
@@ -866,11 +872,8 @@ class MainFrame(wx.Frame):
     def display_threads(self, threads, pagination=None, content_type='thread_list'):
         """显示帖子列表"""
         self.list_ctrl.DeleteAllItems()
-        self.list_ctrl.InsertColumn(0, "标题", width=400)
-        self.list_ctrl.InsertColumn(1, "作者", width=100)
-        self.list_ctrl.InsertColumn(2, "浏览", width=60)
-        self.list_ctrl.InsertColumn(3, "回复", width=60)
-        self.list_ctrl.InsertColumn(4, "时间", width=150)
+        # 调整列宽以适应新的显示格式，设置为2000像素确保完整显示
+        self.list_ctrl.InsertColumn(0, "内容", width=2000)
 
         # 保存当前内容类型和分页信息
         self.current_content_type = content_type
@@ -878,11 +881,20 @@ class MainFrame(wx.Frame):
         self.current_threads = threads
 
         for i, thread in enumerate(threads):
-            index = self.list_ctrl.InsertItem(i, thread.get('subject', ''))
-            self.list_ctrl.SetItem(index, 1, thread.get('username', ''))
-            self.list_ctrl.SetItem(index, 2, str(thread.get('views', 0)))
-            self.list_ctrl.SetItem(index, 3, str(thread.get('posts', 0)))
-            self.list_ctrl.SetItem(index, 4, thread.get('create_date_fmt', ''))
+            # 构建新的显示格式
+            subject = thread.get('subject', '')
+            username = thread.get('username', '')
+            views = thread.get('views', 0)
+            forumname = thread.get('forumname', '')
+            dateline_fmt = thread.get('dateline_fmt', '')
+            posts = thread.get('posts', 0)
+            lastpost_fmt = thread.get('lastpost_fmt', '')
+            lastusername = thread.get('lastusername', '')
+
+            # 按照要求的格式拼接：标题 作者:用户名;浏览:数量;板块:板块名;发表时间:时间;回复:数量;回复时间:时间;最后回复:用户名
+            display_text = f"{subject} 作者:{username};浏览:{views};板块:{forumname};发表时间:{dateline_fmt};回复:{posts};回复时间:{lastpost_fmt};最后回复:{lastusername}"
+
+            index = self.list_ctrl.InsertItem(i, display_text)
 
             # 将帖子ID存储为项目数据
             self.list_ctrl.SetItemData(index, int(thread.get('tid', 0)))
@@ -905,34 +917,22 @@ class MainFrame(wx.Frame):
             prev_text = f"上一页({current_page - 1})"
             prev_index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), prev_text)
             self.list_ctrl.SetItemData(prev_index, -1)  # 特殊标记：上一页
-            # 设置其他列为空
-            for col in range(1, 5):
-                self.list_ctrl.SetItem(prev_index, col, "")
 
         # 2. 下一页控制项
         if current_page < total_page:
             next_text = f"下一页({current_page + 1})"
             next_index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), next_text)
             self.list_ctrl.SetItemData(next_index, -2)  # 特殊标记：下一页
-            # 设置其他列为空
-            for col in range(1, 5):
-                self.list_ctrl.SetItem(next_index, col, "")
 
         # 3. 当前页码跳转控制项
         jump_text = f"第{current_page}页/共{total_page}页 (回车跳转)"
         jump_index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), jump_text)
         self.list_ctrl.SetItemData(jump_index, -3)  # 特殊标记：页码跳转
-        # 设置其他列为空，并让这个项跨列显示
-        for col in range(1, 5):
-            self.list_ctrl.SetItem(jump_index, col, "")
 
         # 4. 回复帖子控制项（仅在帖子详情时显示）
         if self.current_content_type == 'thread_detail':
             reply_index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), "回复帖子")
             self.list_ctrl.SetItemData(reply_index, -4)  # 特殊标记：回复帖子
-            # 设置其他列为空
-            for col in range(1, 5):
-                self.list_ctrl.SetItem(reply_index, col, "")
 
     def load_thread_detail(self, tid):
         """加载帖子详情"""
@@ -992,7 +992,32 @@ class MainFrame(wx.Frame):
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'user_threads')
             elif self.current_content_type == 'user_posts' and hasattr(self, 'current_uid'):
                 result = self.forum_client.get_user_posts(self.current_forum, self.current_uid, next_page)
-                self.display_posts(result.get('postlist', []), result.get('pagination', {}))
+                # 处理 threadlist 格式，转换为新的显示格式
+                threadlist = result.get('threadlist', [])
+                formatted_threads = []
+                for item in threadlist:
+                    thread_info = item.get('thread', {})
+                    post_info = item.get('post', {})
+                    if thread_info and post_info:
+                        formatted_thread = {
+                            'tid': thread_info.get('tid'),
+                            'subject': thread_info.get('subject', ''),
+                            'username': thread_info.get('username', ''),
+                            'uid': thread_info.get('uid'),
+                            'dateline_fmt': thread_info.get('dateline_fmt', ''),  # 帖子发表时间
+                            'views': thread_info.get('views', 0),
+                            'posts': thread_info.get('posts', 0),
+                            'forumname': item.get('forumname', ''),
+                            'lastpost_fmt': post_info.get('dateline_fmt', ''),  # 回复时间作为最后回复时间
+                            'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')  # 优先使用回复者，否则使用帖子最后回复者
+                        }
+                        formatted_threads.append(formatted_thread)
+
+                self.display_threads(formatted_threads, result.get('pagination', {}), 'user_posts')
+            elif self.current_content_type == 'home_content' and hasattr(self, 'current_orderby'):
+                # 添加首页内容的分页支持
+                result = self.forum_client.get_home_content(self.current_forum, self.current_orderby, next_page)
+                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
 
         except Exception as e:
             print(f"加载下一页错误: {e}")
@@ -1129,7 +1154,32 @@ class MainFrame(wx.Frame):
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'user_threads')
             elif self.current_content_type == 'user_posts' and hasattr(self, 'current_uid'):
                 result = self.forum_client.get_user_posts(self.current_forum, self.current_uid, prev_page)
-                self.display_posts(result.get('postlist', []), result.get('pagination', {}))
+                # 处理 threadlist 格式，转换为新的显示格式
+                threadlist = result.get('threadlist', [])
+                formatted_threads = []
+                for item in threadlist:
+                    thread_info = item.get('thread', {})
+                    post_info = item.get('post', {})
+                    if thread_info and post_info:
+                        formatted_thread = {
+                            'tid': thread_info.get('tid'),
+                            'subject': thread_info.get('subject', ''),
+                            'username': thread_info.get('username', ''),
+                            'uid': thread_info.get('uid'),
+                            'dateline_fmt': thread_info.get('dateline_fmt', ''),  # 帖子发表时间
+                            'views': thread_info.get('views', 0),
+                            'posts': thread_info.get('posts', 0),
+                            'forumname': item.get('forumname', ''),
+                            'lastpost_fmt': post_info.get('dateline_fmt', ''),  # 回复时间作为最后回复时间
+                            'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')  # 优先使用回复者，否则使用帖子最后回复者
+                        }
+                        formatted_threads.append(formatted_thread)
+
+                self.display_threads(formatted_threads, result.get('pagination', {}), 'user_posts')
+            elif self.current_content_type == 'home_content' and hasattr(self, 'current_orderby'):
+                # 添加首页内容的分页支持
+                result = self.forum_client.get_home_content(self.current_forum, self.current_orderby, prev_page)
+                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
                 result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, prev_page)
                 self.display_posts(result.get('postlist', []), result.get('pagination', {}))
@@ -1186,7 +1236,32 @@ class MainFrame(wx.Frame):
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'user_threads')
             elif self.current_content_type == 'user_posts' and hasattr(self, 'current_uid'):
                 result = self.forum_client.get_user_posts(self.current_forum, self.current_uid, target_page)
-                self.display_posts(result.get('postlist', []), result.get('pagination', {}))
+                # 处理 threadlist 格式，转换为新的显示格式
+                threadlist = result.get('threadlist', [])
+                formatted_threads = []
+                for item in threadlist:
+                    thread_info = item.get('thread', {})
+                    post_info = item.get('post', {})
+                    if thread_info and post_info:
+                        formatted_thread = {
+                            'tid': thread_info.get('tid'),
+                            'subject': thread_info.get('subject', ''),
+                            'username': thread_info.get('username', ''),
+                            'uid': thread_info.get('uid'),
+                            'dateline_fmt': thread_info.get('dateline_fmt', ''),  # 帖子发表时间
+                            'views': thread_info.get('views', 0),
+                            'posts': thread_info.get('posts', 0),
+                            'forumname': item.get('forumname', ''),
+                            'lastpost_fmt': post_info.get('dateline_fmt', ''),  # 回复时间作为最后回复时间
+                            'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')  # 优先使用回复者，否则使用帖子最后回复者
+                        }
+                        formatted_threads.append(formatted_thread)
+
+                self.display_threads(formatted_threads, result.get('pagination', {}), 'user_posts')
+            elif self.current_content_type == 'home_content' and hasattr(self, 'current_orderby'):
+                # 添加首页内容的分页支持
+                result = self.forum_client.get_home_content(self.current_forum, self.current_orderby, target_page)
+                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
                 result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, target_page)
                 self.display_posts(result.get('postlist', []), result.get('pagination', {}))

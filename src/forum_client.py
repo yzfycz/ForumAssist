@@ -60,34 +60,36 @@ class ForumClient:
 
         return []
 
-    def get_home_content(self, forum_name, orderby="latest"):
+    def get_home_content(self, forum_name, orderby="latest", page=1):
         """
         获取首页内容
 
         Args:
             forum_name: 论坛名称
             orderby: 排序方式
+            page: 页码
 
         Returns:
-            list: 主题列表
+            dict: 包含帖子列表和分页信息的字典
         """
         session = self.auth_manager.get_session(forum_name)
         if not session:
-            return []
+            return {"threadlist": [], "pagination": {}}
 
         forum_config = self.auth_manager.get_user_info(forum_name)
         if not forum_config:
-            return []
+            return {"threadlist": [], "pagination": {}}
 
         try:
             forum_url = forum_config.get('url', '')
             if not forum_url:
-                return []
+                return {"threadlist": [], "pagination": {}}
 
             home_url = f"{forum_url.rstrip('/')}/{API_ENDPOINTS['home_content']}"
             params = {
                 "format": "json",
-                "orderby": ORDERBY_OPTIONS.get(orderby, "tid")
+                "orderby": ORDERBY_OPTIONS.get(orderby, "tid"),
+                "page": page
             }
 
             response = session.get(home_url, params=params)
@@ -97,12 +99,19 @@ class ForumClient:
                     # 首页内容在 message.threadlist 中，不是 data.threadlist
                     message = result.get('message', {})
                     thread_list = message.get('threadlist', []) if isinstance(message, dict) else []
-                    return thread_list
+                    # 返回包含分页信息的字典
+                    return {
+                        "threadlist": thread_list,
+                        "pagination": {
+                            "page": message.get('page', page),
+                            "totalpage": message.get('totalpage', 1)
+                        }
+                    }
 
         except Exception as e:
             print(f"获取首页内容失败: {e}")
 
-        return []
+        return {"threadlist": [], "pagination": {}}
 
     def get_thread_list(self, forum_name, fid, page=1):
         """
@@ -241,9 +250,13 @@ class ForumClient:
                 if result.get('status') == 1:
                     # 用户帖子数据在 message 中，不是 data 中
                     message = result.get('message', {})
+                    # 分页信息直接在message中，不是在pagination中
                     return {
                         "threadlist": message.get('threadlist', []),
-                        "pagination": message.get('pagination', {})
+                        "pagination": {
+                            "page": message.get('page', page),
+                            "totalpage": message.get('totalpage', 1)
+                        }
                     }
 
         except Exception as e:
@@ -265,16 +278,16 @@ class ForumClient:
         """
         session = self.auth_manager.get_session(forum_name)
         if not session:
-            return {"postlist": [], "pagination": {}}
+            return {"threadlist": [], "pagination": {}}
 
         forum_config = self.auth_manager.get_user_info(forum_name)
         if not forum_config:
-            return {"postlist": [], "pagination": {}}
+            return {"threadlist": [], "pagination": {}}
 
         try:
             forum_url = forum_config.get('url', '')
             if not forum_url:
-                return {"postlist": [], "pagination": {}}
+                return {"threadlist": [], "pagination": {}}
 
             user_posts_url = f"{forum_url.rstrip('/')}/{API_ENDPOINTS['user_posts']}"
             params = {
@@ -289,15 +302,19 @@ class ForumClient:
                 if result.get('status') == 1:
                     # 用户回复数据在 message 中，不是 data 中
                     message = result.get('message', {})
+                    # 分页信息直接在message中，不是在pagination中
                     return {
-                        "postlist": message.get('postlist', []),
-                        "pagination": message.get('pagination', {})
+                        "threadlist": message.get('threadlist', []),
+                        "pagination": {
+                            "page": message.get('page', page),
+                            "totalpage": message.get('totalpage', 1)
+                        }
                     }
 
         except Exception as e:
             print(f"获取用户回复失败: {e}")
 
-        return {"postlist": [], "pagination": {}}
+        return {"threadlist": [], "pagination": {}}
 
     def search(self, forum_name, keyword, page=1):
         """
