@@ -160,3 +160,10 @@ Accounts stored in `config/forums.ini` (auto-created):
 - Tested data transformation logic for proper field extraction and display
 - Validated new display format shows complete information without truncation
 - Confirmed accessibility with keyboard navigation and screen reader compatibility
+
+### Recent Fixes (2025-09-29)
+5. **Reply List Navigation Fix**
+   - Fixed issue where users couldn't enter threads from "我的回复" list by pressing Enter
+   - Added 'user_posts' to the list activation condition in on_list_activated method (main_frame.py:691)
+   - Ensured consistent navigation behavior across all user content types
+   - Maintained proper thread detail loading for reply-based content

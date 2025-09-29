@@ -688,7 +688,7 @@ class MainFrame(wx.Frame):
             else:  # 普通帖子项或消息项
                 # 根据内容类型处理不同的操作
                 if hasattr(self, 'current_content_type'):
-                    if self.current_content_type in ['thread_list', 'search_result', 'user_threads', 'home_content']:
+                    if self.current_content_type in ['thread_list', 'search_result', 'user_threads', 'user_posts', 'home_content']:
                         # 加载帖子详情
                         tid = item_data
                         if tid and tid > 0:
