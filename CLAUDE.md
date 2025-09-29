@@ -167,3 +167,32 @@ Accounts stored in `config/forums.ini` (auto-created):
    - Added 'user_posts' to the list activation condition in on_list_activated method (main_frame.py:691)
    - Ensured consistent navigation behavior across all user content types
    - Maintained proper thread detail loading for reply-based content
+
+6. **Multi-Account Support Implementation (2025-09-29)**
+   - Enhanced ConfigManager to support multiple accounts per forum with new configuration structure
+   - Updated AccountManager to prevent duplicate username creation within the same forum
+   - Added account switching functionality to MainFrame file menu
+   - Maintained existing account selection interface with list-based display
+   - Implemented comprehensive account CRUD operations (Create, Read, Update, Delete)
+   - Added username duplication validation for account creation and editing
+   - Enhanced configuration file structure to support multiple accounts per forum
+   - Preserved existing encryption and security measures for password storage
+
+### Multi-Account Configuration Structure
+```
+[Forum_争渡论坛]
+url = http://www.zd.hk/
+username1 = user1
+nickname1 = 用户1
+password1 = [encrypted_password]
+username2 = user2
+nickname2 = 用户2
+password2 = [encrypted_password]
+```
+
+### Key Implementation Details
+- **Backward Compatibility**: Existing configuration files are automatically supported
+- **Security**: Password encryption and decryption maintained with AES encryption
+- **User Experience**: Account selection interface remains unchanged with familiar list layout
+- **Data Integrity**: Duplicate username prevention ensures consistent account management
+- **Menu Integration**: Added "切换账户" option to file menu for easy account switching

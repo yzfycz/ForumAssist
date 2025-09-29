@@ -56,15 +56,34 @@ class ConfigManager:
         Returns:
             list: 论坛账户列表，每个账户是一个字典
         """
-        forums = []
+        accounts = []
         for section in self.config.sections():
             if section.startswith('Forum_'):
                 forum_config = dict(self.config[section])
-                # 解密密码
-                if 'password' in forum_config:
-                    forum_config['password'] = self.crypto.decrypt(forum_config['password'])
-                forums.append(forum_config)
-        return forums
+                forum_name = section[6:]  # 去掉 'Forum_' 前缀
+                url = forum_config.get('url', '')
+
+                # 查找所有用户名（跳过旧的username字段）
+                for key, value in forum_config.items():
+                    if key.startswith('username') and len(key) > 8:  # 确保是 username1, username2 等
+                        # 提取用户名序号
+                        user_num = key[8:]  # 去掉 'username' 前缀
+                        nickname_key = f'nickname{user_num}'
+                        password_key = f'password{user_num}'
+
+                        # 解密密码
+                        password_value = forum_config.get(password_key, '')
+                        password = self.crypto.decrypt(password_value) if password_value else ''
+                        nickname = forum_config.get(nickname_key, '')
+
+                        accounts.append({
+                            'name': forum_name,
+                            'url': url,
+                            'username': value,  # 存储的是用户名
+                            'password': password,
+                            'nickname': nickname
+                        })
+        return accounts
 
     def add_forum(self, forum_data):
         """
@@ -80,13 +99,24 @@ class ConfigManager:
             # 生成配置节名
             section_name = f"Forum_{forum_data['name']}"
 
-            # 加密密码
-            forum_data_copy = forum_data.copy()
-            if 'password' in forum_data_copy:
-                forum_data_copy['password'] = self.crypto.encrypt(forum_data_copy['password'])
+            # 检查论坛是否已存在
+            if section_name not in self.config:
+                # 新论坛，创建基础配置
+                self.config[section_name] = {
+                    'url': forum_data['url']
+                }
 
-            # 添加到配置
-            self.config[section_name] = forum_data_copy
+            # 为该论坛的所有账户查找序号
+            existing_accounts = self.get_forum_accounts(forum_data['name'])
+            user_num = len(existing_accounts) + 1
+
+            # 添加新账户
+            self.config[section_name][f'username{user_num}'] = forum_data['username']
+            self.config[section_name][f'nickname{user_num}'] = forum_data['nickname']
+
+            # 加密密码
+            if 'password' in forum_data:
+                self.config[section_name][f'password{user_num}'] = self.crypto.encrypt(forum_data['password'])
 
             # 保存配置
             self.save_config()
@@ -96,31 +126,135 @@ class ConfigManager:
             print(f"添加论坛账户失败: {e}")
             return False
 
-    def update_forum(self, forum_name, forum_data):
+    def get_forum_accounts(self, forum_name):
         """
-        更新论坛账户
+        获取指定论坛的所有账户
 
         Args:
             forum_name: 论坛名称
-            forum_data: 新的论坛账户数据
+
+        Returns:
+            list: 该论坛的账户列表
+        """
+        section_name = f"Forum_{forum_name}"
+        if section_name not in self.config:
+            return []
+
+        accounts = []
+        forum_config = dict(self.config[section_name])
+
+        # 查找所有用户名（跳过旧的username字段）
+        for key, value in forum_config.items():
+            if key.startswith('username') and len(key) > 8:  # 确保是 username1, username2 等
+                user_num = key[8:]  # 去掉 'username' 前缀
+                accounts.append(value)  # 存储用户名
+
+        return accounts
+
+    def forum_account_exists(self, forum_name, username):
+        """
+        检查指定论坛的账户是否已存在
+
+        Args:
+            forum_name: 论坛名称
+            username: 用户名
+
+        Returns:
+            bool: 是否存在
+        """
+        existing_accounts = self.get_forum_accounts(forum_name)
+        return username in existing_accounts
+
+    def delete_forum_account(self, forum_name, username):
+        """
+        删除指定论坛的特定账户
+
+        Args:
+            forum_name: 论坛名称
+            username: 用户名
+
+        Returns:
+            bool: 是否删除成功
+        """
+        try:
+            section_name = f"Forum_{forum_name}"
+            if section_name not in self.config:
+                return False
+
+            # 查找要删除的账户
+            forum_config = dict(self.config[section_name])
+            key_to_delete = None
+
+            for key, value in forum_config.items():
+                if key.startswith('username') and len(key) > 8 and value == username:
+                    user_num = key[8:]  # 去掉 'username' 前缀
+                    key_to_delete = user_num
+                    break
+
+            if not key_to_delete:
+                return False
+
+            # 删除相关字段
+            keys_to_remove = [f'username{key_to_delete}', f'password{key_to_delete}', f'nickname{key_to_delete}']
+            for key in keys_to_remove:
+                if key in self.config[section_name]:
+                    del self.config[section_name][key]
+
+            # 如果没有账户了，删除整个论坛
+            remaining_accounts = self.get_forum_accounts(forum_name)
+            if not remaining_accounts:
+                self.config.remove_section(section_name)
+
+            # 保存配置
+            self.save_config()
+            return True
+
+        except Exception as e:
+            print(f"删除论坛账户失败: {e}")
+            return False
+
+    def update_forum_account(self, forum_name, old_username, new_account_data):
+        """
+        更新指定论坛的特定账户
+
+        Args:
+            forum_name: 论坛名称
+            old_username: 旧用户名
+            new_account_data: 新的账户数据
 
         Returns:
             bool: 是否更新成功
         """
         try:
             section_name = f"Forum_{forum_name}"
-
-            # 检查论坛是否存在
             if section_name not in self.config:
                 return False
 
-            # 加密密码
-            forum_data_copy = forum_data.copy()
-            if 'password' in forum_data_copy:
-                forum_data_copy['password'] = self.crypto.encrypt(forum_data_copy['password'])
+            # 查找要更新的账户
+            forum_config = dict(self.config[section_name])
+            key_to_update = None
 
-            # 更新配置
-            self.config[section_name] = forum_data_copy
+            for key, value in forum_config.items():
+                if key.startswith('username') and len(key) > 8 and value == old_username:
+                    user_num = key[8:]  # 去掉 'username' 前缀
+                    key_to_update = user_num
+                    break
+
+            if not key_to_update:
+                return False
+
+            # 如果用户名改变，检查新用户名是否已存在
+            if old_username != new_account_data['username']:
+                if self.forum_account_exists(forum_name, new_account_data['username']):
+                    return False
+
+            # 更新账户信息
+            self.config[section_name][f'username{key_to_update}'] = new_account_data['username']
+            self.config[section_name][f'nickname{key_to_update}'] = new_account_data['nickname']
+
+            # 加密密码
+            if 'password' in new_account_data:
+                self.config[section_name][f'password{key_to_update}'] = self.crypto.encrypt(new_account_data['password'])
 
             # 保存配置
             self.save_config()

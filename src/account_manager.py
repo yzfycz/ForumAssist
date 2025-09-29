@@ -127,9 +127,9 @@ class AccountManager(wx.Dialog):
         if dialog.ShowModal() == wx.ID_OK:
             account_data = dialog.get_account_data()
             if account_data:
-                # 检查账户名称是否已存在
-                if self.config_manager.forum_exists(account_data['name']):
-                    wx.MessageBox("账户名称已存在", "错误", wx.OK | wx.ICON_ERROR)
+                # 检查同一论坛下用户名是否已存在
+                if self.config_manager.forum_account_exists(account_data['name'], account_data['username']):
+                    wx.MessageBox("该论坛下此用户名已存在", "错误", wx.OK | wx.ICON_ERROR)
                     return
 
                 # 添加账户
@@ -155,7 +155,7 @@ class AccountManager(wx.Dialog):
             account_data = dialog.get_account_data()
             if account_data:
                 # 更新账户
-                if self.config_manager.update_forum(account['name'], account_data):
+                if self.config_manager.update_forum_account(account['name'], account['username'], account_data):
                     self.accounts = self.config_manager.get_forum_list()
                     self.load_accounts()
                     wx.MessageBox("账户更新成功", "成功", wx.OK | wx.ICON_INFORMATION)
@@ -175,14 +175,14 @@ class AccountManager(wx.Dialog):
 
         # 确认删除
         result = wx.MessageBox(
-            f"确定要删除账户 '{account['name']}' 吗？",
+            f"确定要删除账户 '{account['name']} - {account['username']}' 吗？",
             "确认删除",
             wx.YES_NO | wx.ICON_QUESTION
         )
 
         if result == wx.YES:
             # 删除账户
-            if self.config_manager.delete_forum(account['name']):
+            if self.config_manager.delete_forum_account(account['name'], account['username']):
                 self.accounts = self.config_manager.get_forum_list()
                 self.load_accounts()
                 wx.MessageBox("账户删除成功", "成功", wx.OK | wx.ICON_INFORMATION)
@@ -263,7 +263,7 @@ class AccountEditDialog(wx.Dialog):
             self.name_combo.Disable()  # 编辑模式下禁止修改名称
 
         # 用户名
-        username_label = wx.StaticText(parent, label="争渡好或邮箱:")
+        username_label = wx.StaticText(parent, label="争渡号或邮箱:")
         self.username_ctrl = wx.TextCtrl(parent, style=wx.TE_PROCESS_ENTER)
 
         # 密码

@@ -152,6 +152,9 @@ class MainFrame(wx.Frame):
         account_item = file_menu.Append(wx.ID_ANY, "账户管理", "管理论坛账户")
         self.Bind(wx.EVT_MENU, self.on_account_management, account_item)
 
+        switch_account_item = file_menu.Append(wx.ID_ANY, "切换账户", "切换到其他账户")
+        self.Bind(wx.EVT_MENU, self.on_switch_account, switch_account_item)
+
         exit_item = file_menu.Append(wx.ID_EXIT, "退出", "退出程序")
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
 
@@ -715,6 +718,19 @@ class MainFrame(wx.Frame):
     def on_account_management(self, event):
         """账户管理事件"""
         self.show_account_manager()
+
+    def on_switch_account(self, event):
+        """切换账户事件"""
+        # 刷新账户列表
+        self.accounts = self.config_manager.get_forum_list()
+
+        # 如果没有账户，显示账户管理界面
+        if not self.accounts:
+            wx.MessageBox("暂无账户，请先添加账户", "提示", wx.OK | wx.ICON_INFORMATION)
+            self.show_account_manager()
+        else:
+            # 显示账户选择界面
+            self.show_account_selection()
 
     def on_exit(self, event):
         """退出事件"""
