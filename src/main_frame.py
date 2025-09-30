@@ -276,26 +276,100 @@ class MainFrame(wx.Frame):
         for forum in forum_list:
             forum_name = forum.get('name', '')
             forum_id = forum.get('fid', '')
+            forum_types = forum.get('types', {})
 
-            # 检查是否有子板块
-            sub_list = forum.get('sublist', [])
+            # 添加论坛主分类（第0级）
+            forum_item_text = f"第0级 {forum_name}"
+            forum_item = self.tree_ctrl.AppendItem(root, forum_item_text)
 
-            if sub_list:
-                # 有子板块，添加为一级节点（可展开）
-                forum_item = self.tree_ctrl.AppendItem(root, forum_name)
-                # 存储板块ID（虽然有子板块，但父板块本身也可能有内容）
-                self.tree_ctrl.SetItemData(forum_item, forum_id)
+            # 存储论坛数据到节点
+            forum_data = {
+                'type': 'forum',
+                'fid': forum_id,
+                'name': forum_name
+            }
+            self.tree_ctrl.SetItemData(forum_item, forum_data)
 
-                # 添加子板块（二级节点）
-                for sub_forum in sub_list:
-                    sub_name = sub_forum.get('name', '')
-                    sub_fid = sub_forum.get('fid', '')
-                    sub_item = self.tree_ctrl.AppendItem(forum_item, sub_name)
-                    self.tree_ctrl.SetItemData(sub_item, sub_fid)
-            else:
-                # 没有子板块，直接添加为一级节点（零级显示）
-                forum_item = self.tree_ctrl.AppendItem(root, forum_name)
-                self.tree_ctrl.SetItemData(forum_item, forum_id)
+            # 添加typeid1子分类（第1级）
+            typeid1_list = forum_types.get('typeid1', [])
+            if typeid1_list:
+                for type1 in typeid1_list:
+                    type1_name = type1.get('name', '')
+                    type1_id = type1.get('id', '')
+
+                    type1_item_text = f"第1级 {type1_name}"
+                    type1_item = self.tree_ctrl.AppendItem(forum_item, type1_item_text)
+
+                    # 存储typeid1数据到节点
+                    type1_data = {
+                        'type': 'typeid1',
+                        'fid': forum_id,
+                        'typeid1': type1_id,
+                        'name': type1_name,
+                        'parent_name': forum_name
+                    }
+                    self.tree_ctrl.SetItemData(type1_item, type1_data)
+
+                    # 添加typeid2子分类（第2级）
+                    typeid2_list = forum_types.get('typeid2', [])
+                    if typeid2_list:
+                        for type2 in typeid2_list:
+                            type2_name = type2.get('name', '')
+                            type2_id = type2.get('id', '')
+
+                            type2_item_text = f"第2级 {type2_name}"
+                            type2_item = self.tree_ctrl.AppendItem(type1_item, type2_item_text)
+
+                            # 存储typeid2数据到节点
+                            type2_data = {
+                                'type': 'typeid2',
+                                'fid': forum_id,
+                                'typeid1': type1_id,
+                                'typeid2': type2_id,
+                                'name': type2_name,
+                                'parent_name': type1_name
+                            }
+                            self.tree_ctrl.SetItemData(type2_item, type2_data)
+
+            # 添加typeid3子分类（第1级，直接挂在论坛下）
+            typeid3_list = forum_types.get('typeid3', [])
+            if typeid3_list:
+                for type3 in typeid3_list:
+                    type3_name = type3.get('name', '')
+                    type3_id = type3.get('id', '')
+
+                    type3_item_text = f"第1级 {type3_name}"
+                    type3_item = self.tree_ctrl.AppendItem(forum_item, type3_item_text)
+
+                    # 存储typeid3数据到节点
+                    type3_data = {
+                        'type': 'typeid3',
+                        'fid': forum_id,
+                        'typeid3': type3_id,
+                        'name': type3_name,
+                        'parent_name': forum_name
+                    }
+                    self.tree_ctrl.SetItemData(type3_item, type3_data)
+
+            # 添加typeid4子分类（第1级，直接挂在论坛下）
+            typeid4_list = forum_types.get('typeid4', [])
+            if typeid4_list:
+                for type4 in typeid4_list:
+                    type4_name = type4.get('name', '')
+                    type4_id = type4.get('id', '')
+
+                    type4_item_text = f"第1级 {type4_name}"
+                    type4_item = self.tree_ctrl.AppendItem(forum_item, type4_item_text)
+
+                    # 存储typeid4数据到节点
+                    type4_data = {
+                        'type': 'typeid4',
+                        'fid': forum_id,
+                        'typeid4': type4_id,
+                        'name': type4_name,
+                        'parent_name': forum_name
+                    }
+                    self.tree_ctrl.SetItemData(type4_item, type4_data)
 
         # 设置焦点到树视图
         self.tree_ctrl.SetFocus()
@@ -326,11 +400,28 @@ class MainFrame(wx.Frame):
 
             text = self.tree_ctrl.GetItemText(item)
 
-            # 获取存储在item data中的板块ID
+            # 获取存储在item data中的板块信息
             item_data = self.tree_ctrl.GetItemData(item)
-            fid = item_data if item_data else None
 
-            self.load_content(text, fid)
+            # 处理不同类型的数据
+            if isinstance(item_data, dict):
+                # 新的层级结构数据
+                data_type = item_data.get('type')
+                fid = item_data.get('fid')
+
+                if data_type == 'forum':
+                    # 论坛主分类
+                    self.load_content(text, fid)
+                elif data_type in ['typeid1', 'typeid2', 'typeid3', 'typeid4']:
+                    # 子分类，需要传递分类参数
+                    self.load_content_with_type(text, item_data)
+                else:
+                    # 未知类型，默认处理
+                    self.load_content(text, fid)
+            else:
+                # 旧的简单数据格式（直接是fid）
+                fid = item_data if item_data else None
+                self.load_content(text, fid)
         except Exception as e:
             print(f"树视图激活事件错误: {e}")
 
@@ -569,12 +660,28 @@ class MainFrame(wx.Frame):
 
             text = self.tree_ctrl.GetItemText(selected_item)
 
-            # 获取存储在item data中的板块ID
+            # 获取存储在item data中的板块信息
             item_data = self.tree_ctrl.GetItemData(selected_item)
-            fid = item_data if item_data else None
 
-            # 加载对应内容
-            self.load_content(text, fid)
+            # 处理不同类型的数据
+            if isinstance(item_data, dict):
+                # 新的层级结构数据
+                data_type = item_data.get('type')
+                fid = item_data.get('fid')
+
+                if data_type == 'forum':
+                    # 论坛主分类
+                    self.load_content(text, fid)
+                elif data_type in ['typeid1', 'typeid2', 'typeid3', 'typeid4']:
+                    # 子分类，需要传递分类参数
+                    self.load_content_with_type(text, item_data)
+                else:
+                    # 未知类型，默认处理
+                    self.load_content(text, fid)
+            else:
+                # 旧的简单数据格式（直接是fid）
+                fid = item_data if item_data else None
+                self.load_content(text, fid)
 
             # 加载完成后将焦点转移到列表视图
             if hasattr(self, 'list_ctrl'):
@@ -760,6 +867,34 @@ class MainFrame(wx.Frame):
             # 加载指定板块的内容
             self.load_forum_section(text, fid)
 
+    def load_content_with_type(self, text, type_data):
+        """加载带有分类类型的内容"""
+        # 清理消息界面（如果存在）
+        self.hide_message_interface()
+
+        # 获取分类参数
+        data_type = type_data.get('type')
+        fid = type_data.get('fid')
+
+        # 构建API参数
+        api_params = {
+            'fid': fid
+        }
+
+        # 根据类型添加相应的分类ID
+        if data_type == 'typeid1':
+            api_params['typeid1'] = type_data.get('typeid1')
+        elif data_type == 'typeid2':
+            api_params['typeid1'] = type_data.get('typeid1')
+            api_params['typeid2'] = type_data.get('typeid2')
+        elif data_type == 'typeid3':
+            api_params['typeid3'] = type_data.get('typeid3')
+        elif data_type == 'typeid4':
+            api_params['typeid4'] = type_data.get('typeid4')
+
+        # 加载分类内容
+        self.load_forum_section_with_type(text, api_params)
+
     def hide_message_interface(self):
         """隐藏消息界面"""
         try:
@@ -877,6 +1012,15 @@ class MainFrame(wx.Frame):
 
         self.current_fid = fid
         result = self.forum_client.get_thread_list(self.current_forum, fid)
+        self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
+
+    def load_forum_section_with_type(self, section_name, api_params):
+        """加载带有分类参数的论坛板块"""
+        if not api_params.get('fid'):
+            return
+
+        self.current_fid = api_params.get('fid')
+        result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params)
         self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
 
     def search_content(self, keyword):

@@ -163,6 +163,58 @@ class ForumClient:
 
         return {"threadlist": [], "pagination": {}}
 
+    def get_thread_list_with_type(self, forum_name, api_params, page=1):
+        """
+        获取带有分类参数的帖子列表
+
+        Args:
+            forum_name: 论坛名称
+            api_params: API参数，包含fid和分类ID
+            page: 页码
+
+        Returns:
+            dict: 包含帖子列表和分页信息的字典
+        """
+        session = self.auth_manager.get_session(forum_name)
+        if not session:
+            return {"threadlist": [], "pagination": {}}
+
+        forum_config = self.auth_manager.get_user_info(forum_name)
+        if not forum_config:
+            return {"threadlist": [], "pagination": {}}
+
+        try:
+            forum_url = forum_config.get('url', '')
+            if not forum_url:
+                return {"threadlist": [], "pagination": {}}
+
+            thread_url = f"{forum_url.rstrip('/')}/{API_ENDPOINTS['thread_list']}"
+            params = {
+                "format": "json",
+                "page": page
+            }
+
+            # 添加所有API参数
+            params.update(api_params)
+
+            response = session.get(thread_url, params=params)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('status') == 1:
+                    message = result.get('message', {})
+                    return {
+                        "threadlist": message.get('threadlist', []),
+                        "pagination": {
+                            "page": message.get('page', 1),
+                            "totalpage": message.get('totalpage', 1)
+                        }
+                    }
+
+        except Exception as e:
+            print(f"获取分类帖子列表失败: {e}")
+
+        return {"threadlist": [], "pagination": {}}
+
     def get_thread_detail(self, forum_name, tid, page=1):
         """
         获取帖子详情
