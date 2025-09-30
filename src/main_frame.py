@@ -38,6 +38,9 @@ class MainFrame(wx.Frame):
         # 创建主窗口
         super().__init__(None, title="论坛助手", size=(1024, 768))
 
+        # 最大化窗口
+        self.Maximize()
+
         # 绑定事件
         self.Bind(EVT_ACCOUNT_SELECTED, self.on_account_selected)
 
@@ -1549,7 +1552,7 @@ class MainFrame(wx.Frame):
             wx.MessageBox("加载消息详情失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def display_message_conversation(self, messages):
-        """显示消息对话"""
+        """显示消息对话（按时间升序：最老消息在最上面，最新消息在最下面）"""
         self.list_ctrl.DeleteAllItems()
         self.list_ctrl.InsertColumn(0, "内容", width=600)
         self.list_ctrl.InsertColumn(1, "发送者", width=100)
@@ -1557,6 +1560,10 @@ class MainFrame(wx.Frame):
 
         # 保存当前消息记录
         self.current_conversation = messages
+
+        # 按时间升序排列（最老的在上面，最新的在下面）
+        # HTML解析器返回的消息是降序排列的（最新的在前面），需要反转
+        messages = messages[::-1]
 
         for i, message in enumerate(messages):
             # 字段名映射：HTML解析器返回的是content、username、datetime

@@ -178,6 +178,22 @@ Accounts stored in `config/forums.ini` (auto-created):
    - Enhanced configuration file structure to support multiple accounts per forum
    - Preserved existing encryption and security measures for password storage
 
+7. **Hierarchical Tree View Implementation (2025-09-29)**
+   - Implemented hierarchical forum structure display using existing API data
+   - Enhanced tree view to show multi-level forum categories (level 0: forum, level 1: typeid1, level 2: typeid2)
+   - Removed unwanted "分类▼" and "状态▼" nodes from tree display
+   - Eliminated level prefixes (第0级, 第1级) as screen readers handle this automatically
+   - Added proper tree node data storage with type information for content loading
+   - Implemented type-specific content loading methods for different forum categories
+   - Fixed account creation dialog to default select first forum option
+
+8. **Message Privacy Enhancement (2025-09-29)**
+   - Modified message list display to hide message content, showing only usernames
+   - Enhanced message conversation view to display full content when opening detailed conversation
+   - Fixed field name mapping issues between HTML parser and display methods
+   - Implemented proper message ordering to show oldest messages first, newest at bottom
+   - Added window maximization on application startup for better visibility
+
 ### Multi-Account Configuration Structure
 ```
 [Forum_争渡论坛]
