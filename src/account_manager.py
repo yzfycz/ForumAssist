@@ -261,6 +261,10 @@ class AccountEditDialog(wx.Dialog):
         self.name_combo = wx.ComboBox(parent, choices=forum_choices, style=wx.CB_READONLY)
         if self.is_edit:
             self.name_combo.Disable()  # 编辑模式下禁止修改名称
+        else:
+            # 新建模式下默认选中第一个论坛
+            if forum_choices:
+                self.name_combo.SetValue(forum_choices[0])
 
         # 用户名
         username_label = wx.StaticText(parent, label="争渡号或邮箱:")

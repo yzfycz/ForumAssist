@@ -278,9 +278,8 @@ class MainFrame(wx.Frame):
             forum_id = forum.get('fid', '')
             forum_types = forum.get('types', {})
 
-            # 添加论坛主分类（第0级）
-            forum_item_text = f"第0级 {forum_name}"
-            forum_item = self.tree_ctrl.AppendItem(root, forum_item_text)
+            # 添加论坛主分类
+            forum_item = self.tree_ctrl.AppendItem(root, forum_name)
 
             # 存储论坛数据到节点
             forum_data = {
@@ -290,15 +289,18 @@ class MainFrame(wx.Frame):
             }
             self.tree_ctrl.SetItemData(forum_item, forum_data)
 
-            # 添加typeid1子分类（第1级）
+            # 添加typeid1子分类
             typeid1_list = forum_types.get('typeid1', [])
             if typeid1_list:
                 for type1 in typeid1_list:
                     type1_name = type1.get('name', '')
                     type1_id = type1.get('id', '')
 
-                    type1_item_text = f"第1级 {type1_name}"
-                    type1_item = self.tree_ctrl.AppendItem(forum_item, type1_item_text)
+                    # 过滤掉"分类▼"和id为0的项目
+                    if '▼' in type1_name or type1_id == 0:
+                        continue
+
+                    type1_item = self.tree_ctrl.AppendItem(forum_item, type1_name)
 
                     # 存储typeid1数据到节点
                     type1_data = {
@@ -310,15 +312,18 @@ class MainFrame(wx.Frame):
                     }
                     self.tree_ctrl.SetItemData(type1_item, type1_data)
 
-                    # 添加typeid2子分类（第2级）
-                    typeid2_list = forum_types.get('typeid2', [])
+                    # 添加typeid2子分类
+                    typeid2_list = type1.get('typeid2', [])
                     if typeid2_list:
                         for type2 in typeid2_list:
                             type2_name = type2.get('name', '')
                             type2_id = type2.get('id', '')
 
-                            type2_item_text = f"第2级 {type2_name}"
-                            type2_item = self.tree_ctrl.AppendItem(type1_item, type2_item_text)
+                            # 过滤掉"状态▼"和id为0的项目
+                            if '▼' in type2_name or type2_id == 0:
+                                continue
+
+                            type2_item = self.tree_ctrl.AppendItem(type1_item, type2_name)
 
                             # 存储typeid2数据到节点
                             type2_data = {
@@ -331,15 +336,18 @@ class MainFrame(wx.Frame):
                             }
                             self.tree_ctrl.SetItemData(type2_item, type2_data)
 
-            # 添加typeid3子分类（第1级，直接挂在论坛下）
+            # 添加typeid3子分类（直接挂在论坛下）
             typeid3_list = forum_types.get('typeid3', [])
             if typeid3_list:
                 for type3 in typeid3_list:
                     type3_name = type3.get('name', '')
                     type3_id = type3.get('id', '')
 
-                    type3_item_text = f"第1级 {type3_name}"
-                    type3_item = self.tree_ctrl.AppendItem(forum_item, type3_item_text)
+                    # 过滤掉包含"▼"和id为0的项目
+                    if '▼' in type3_name or type3_id == 0:
+                        continue
+
+                    type3_item = self.tree_ctrl.AppendItem(forum_item, type3_name)
 
                     # 存储typeid3数据到节点
                     type3_data = {
@@ -351,15 +359,18 @@ class MainFrame(wx.Frame):
                     }
                     self.tree_ctrl.SetItemData(type3_item, type3_data)
 
-            # 添加typeid4子分类（第1级，直接挂在论坛下）
+            # 添加typeid4子分类（直接挂在论坛下）
             typeid4_list = forum_types.get('typeid4', [])
             if typeid4_list:
                 for type4 in typeid4_list:
                     type4_name = type4.get('name', '')
                     type4_id = type4.get('id', '')
 
-                    type4_item_text = f"第1级 {type4_name}"
-                    type4_item = self.tree_ctrl.AppendItem(forum_item, type4_item_text)
+                    # 过滤掉包含"▼"和id为0的项目
+                    if '▼' in type4_name or type4_id == 0:
+                        continue
+
+                    type4_item = self.tree_ctrl.AppendItem(forum_item, type4_name)
 
                     # 存储typeid4数据到节点
                     type4_data = {
