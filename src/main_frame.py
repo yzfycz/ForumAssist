@@ -1509,23 +1509,22 @@ class MainFrame(wx.Frame):
             wx.MessageBox("回复发送失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def display_messages(self, messages):
-        """显示消息列表"""
+        """显示消息列表（只显示用户名，隐藏消息内容）"""
         self.list_ctrl.DeleteAllItems()
-        self.list_ctrl.InsertColumn(0, "用户名", width=200)
-        self.list_ctrl.InsertColumn(1, "状态", width=100)
+        # 只显示用户名列，隐藏消息内容
+        self.list_ctrl.InsertColumn(0, "用户名", width=400)
 
         # 保存消息列表
         self.current_messages = messages
 
         for i, message in enumerate(messages):
             username = message.get('username', '')
-            status = message.get('status', '')
             touid = message.get('touid', '')
 
+            # 只显示用户名，不显示任何消息内容
             index = self.list_ctrl.InsertItem(i, username)
-            self.list_ctrl.SetItem(index, 1, status)
 
-            # 将对方用户ID存储为项目数据（转换为整数）
+            # 将对方用户ID存储为项目数据（转换为整数）用于后续打开对话
             try:
                 uid_value = int(touid) if touid else 0
             except (ValueError, TypeError):
