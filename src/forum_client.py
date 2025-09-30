@@ -244,8 +244,16 @@ class ForumClient:
             params = {
                 "format": "json",
                 "tid": tid,
-                "page": page
+                "page": page,
+                "appkey": "24b22d1468",
+                "seckey": "cb433ea43a"
             }
+            # 尝试添加auth参数（如果有的话）
+            user_info = self.auth_manager.get_user_info(forum_name)
+            if user_info:
+                auth = user_info.get('auth')
+                if auth:
+                    params['auth'] = auth
 
             response = session.get(detail_url, params=params)
             if response.status_code == 200:
@@ -255,9 +263,14 @@ class ForumClient:
                     message = result.get('message', {})
                     return {
                         "postlist": message.get('postlist', []),
-                        "pagination": message.get('pagination', {}),
+                        "pagination": {
+                            "page": message.get('page', 1),
+                            "totalpage": message.get('totalpage', 1)
+                        },
                         "thread_info": message.get('thread', {})
                     }
+                else:
+                    pass  # API返回状态不为1
 
         except Exception as e:
             print(f"获取帖子详情失败: {e}")

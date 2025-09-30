@@ -57,6 +57,11 @@ class AuthenticationManager:
                     user_data = result.get('message', {}).get('user', {})
                     uid = user_data.get('uid')
 
+                    # 提取auth参数（如果存在）
+                    auth = result.get('message', {}).get('user', {}).get('auth')
+                    if auth:
+                        user_data['auth'] = auth
+                        
                     # 如果从登录响应中获取到了用户信息，直接使用
                     if user_data and uid:
                         # 合并论坛配置和用户信息

@@ -32,6 +32,10 @@ class MainFrame(wx.Frame):
         self.message_manager = MessageManager(self.forum_client, self.auth_manager)
         self.current_forum = None
 
+        # 焦点管理
+        self.saved_list_index = -1
+        self.saved_page_info = None  # 保存页面信息：{page: int, content_type: str, params: dict}
+
         # 获取账户列表
         self.accounts = self.config_manager.get_forum_list()
 
@@ -254,7 +258,7 @@ class MainFrame(wx.Frame):
             user_info = self.auth_manager.get_user_info(self.current_forum)
             nickname = user_info.get('username', '未知用户')
             forum_name = self.current_forum
-            self.SetTitle(f"{nickname}-{forum_name}-论坛助手")
+            self.SetTitle(f"{forum_name}-<{nickname}>-论坛助手")
 
     def load_forum_data(self):
         """加载论坛数据"""
@@ -496,12 +500,16 @@ class MainFrame(wx.Frame):
     def go_back_to_previous_list(self):
         """返回之前的列表"""
         try:
-            if hasattr(self, 'previous_content_type') and hasattr(self, 'previous_content_params'):
-                # 恢复之前的内容类型和参数
+            # 优先尝试恢复到保存的页面信息
+            if self.saved_page_info and self.restore_to_correct_page():
+                # 成功恢复到正确页面，现在恢复焦点
+                if self.saved_list_index != -1 and self.saved_list_index < self.list_ctrl.GetItemCount():
+                    wx.CallAfter(self.reset_keyboard_cursor, self.saved_list_index)
+            elif hasattr(self, 'previous_content_type') and hasattr(self, 'previous_content_params'):
+                # 回退到原来的恢复逻辑
                 content_type = self.previous_content_type
                 params = self.previous_content_params
 
-                # 先恢复内容，然后再恢复焦点
                 if content_type == 'thread_list' and 'fid' in params:
                     self.load_forum_section_and_restore_focus(params.get('forum_name', ''), params['fid'])
                 elif content_type == 'user_threads':
@@ -535,7 +543,7 @@ class MainFrame(wx.Frame):
 
             # 获取板块名称用于标题
             forum_name_text = forum_name if forum_name else self.current_forum
-            self.SetTitle(f"{forum_name_text}-{self.get_user_nickname()}-论坛助手")
+            self.SetTitle(f"{forum_name_text}-<{self.get_user_nickname()}>-论坛助手")
 
             # 显示内容
             self.display_threads_and_restore_focus(threads, pagination, 'thread_list')
@@ -545,14 +553,14 @@ class MainFrame(wx.Frame):
     def load_latest_threads_and_restore_focus(self):
         """加载最新发表并恢复焦点"""
         result = self.forum_client.get_home_content(self.current_forum, "latest")
-        self.SetTitle(f"最新发表-{self.get_user_nickname()}-论坛助手")
+        self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
         self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
         self.current_orderby = 'latest'
 
     def load_latest_replies_and_restore_focus(self):
         """加载最新回复并恢复焦点"""
         result = self.forum_client.get_home_content(self.current_forum, "lastpost")
-        self.SetTitle(f"最新回复-{self.get_user_nickname()}-论坛助手")
+        self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
         self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
         self.current_orderby = 'lastpost'
 
@@ -581,7 +589,7 @@ class MainFrame(wx.Frame):
                         }
                         formatted_threads.append(formatted_thread)
 
-                self.SetTitle(f"我的发表-{self.get_user_nickname()}-论坛助手")
+                self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
                 self.display_threads_and_restore_focus(formatted_threads, result.get('pagination', {}), 'user_threads')
 
     def load_my_posts_and_restore_focus(self):
@@ -615,45 +623,162 @@ class MainFrame(wx.Frame):
                         }
                         formatted_threads.append(formatted_thread)
 
-                self.SetTitle(f"我的回复-{self.get_user_nickname()}-论坛助手")
+                self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
                 self.display_threads_and_restore_focus(formatted_threads, result.get('pagination', {}), 'user_posts')
 
     def search_content_and_restore_focus(self, keyword):
         """搜索内容并恢复焦点"""
         result = self.forum_client.search(self.current_forum, keyword)
-        self.SetTitle(f"搜索: {keyword}-{self.get_user_nickname()}-论坛助手")
+        self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
         self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
+
+    
+  
+    def reset_keyboard_cursor(self, target_index):
+        """重置键盘游标位置到指定索引"""
+        try:
+            if 0 <= target_index < self.list_ctrl.GetItemCount():
+                # 先取消所有选择
+                for i in range(self.list_ctrl.GetItemCount()):
+                    self.list_ctrl.SetItemState(i, 0, wx.LIST_STATE_SELECTED)
+
+                # 设置目标项目为选中状态
+                self.list_ctrl.SetItemState(target_index, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
+                self.list_ctrl.EnsureVisible(target_index)
+
+                # 关键：设置焦点到列表控件
+                self.list_ctrl.SetFocus()
+
+                # 强制更新键盘游标位置
+                # 通过设置FOCUSED状态来重置内部键盘状态
+                self.list_ctrl.SetItemState(target_index, wx.LIST_STATE_FOCUSED, wx.LIST_STATE_FOCUSED)
+
+        except Exception as e:
+            print(f"重置键盘游标错误: {e}")
+
+    def get_current_page_params(self):
+        """获取当前页面的参数"""
+        params = {}
+        if hasattr(self, 'current_content_type'):
+            if self.current_content_type == 'thread_list' and hasattr(self, 'current_fid'):
+                params['fid'] = self.current_fid
+            elif self.current_content_type == 'user_threads' and hasattr(self, 'current_uid'):
+                params['uid'] = self.current_uid
+            elif self.current_content_type == 'user_posts' and hasattr(self, 'current_uid'):
+                params['uid'] = self.current_uid
+            elif self.current_content_type == 'search_result' and hasattr(self, 'current_keyword'):
+                params['keyword'] = self.current_keyword
+            elif self.current_content_type == 'home_content' and hasattr(self, 'current_orderby'):
+                params['orderby'] = self.current_orderby
+        return params
+
+    def restore_to_correct_page(self):
+        """恢复到正确的页面"""
+        if not self.saved_page_info:
+            return False
+
+        try:
+            page_info = self.saved_page_info
+            content_type = page_info.get('content_type')
+            page = page_info.get('page', 1)
+            params = page_info.get('params', {})
+
+            # 根据内容类型跳转到对应页面
+            if content_type == 'thread_list' and 'fid' in params:
+                # 跳转到指定板块的指定页面
+                result = self.forum_client.get_thread_list(self.current_forum, params['fid'], page)
+                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
+                return True
+            elif content_type == 'user_threads' and 'uid' in params:
+                # 跳转到用户发表的指定页面
+                result = self.forum_client.get_user_threads(self.current_forum, params['uid'], page)
+                threadlist = result.get('threadlist', [])
+                formatted_threads = []
+                for item in threadlist:
+                    if item:
+                        formatted_thread = {
+                            'tid': item.get('tid'),
+                            'subject': item.get('subject', ''),
+                            'username': item.get('username', ''),
+                            'uid': item.get('uid'),
+                            'dateline_fmt': item.get('dateline_fmt', ''),
+                            'views': item.get('views', 0),
+                            'posts': item.get('posts', 0),
+                            'forumname': item.get('forumname', '')
+                        }
+                        formatted_threads.append(formatted_thread)
+                self.display_threads(formatted_threads, result.get('pagination', {}), 'user_threads')
+                return True
+            elif content_type == 'user_posts' and 'uid' in params:
+                # 跳转到用户回复的指定页面
+                result = self.forum_client.get_user_posts(self.current_forum, params['uid'], page)
+                threadlist = result.get('threadlist', [])
+                formatted_threads = []
+                for item in threadlist:
+                    thread_info = item.get('thread', {})
+                    post_info = item.get('post', {})
+                    if thread_info and post_info:
+                        formatted_thread = {
+                            'tid': thread_info.get('tid'),
+                            'subject': thread_info.get('subject', ''),
+                            'username': thread_info.get('username', ''),
+                            'uid': thread_info.get('uid'),
+                            'dateline_fmt': thread_info.get('dateline_fmt', ''),
+                            'views': thread_info.get('views', 0),
+                            'posts': thread_info.get('posts', 0),
+                            'forumname': item.get('forumname', ''),
+                            'lastpost_fmt': post_info.get('dateline_fmt', ''),
+                            'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')
+                        }
+                        formatted_threads.append(formatted_thread)
+                self.display_threads(formatted_threads, result.get('pagination', {}), 'user_posts')
+                return True
+            elif content_type == 'search_result' and 'keyword' in params:
+                # 跳转到搜索结果的指定页面
+                result = self.forum_client.search(self.current_forum, params['keyword'], page)
+                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
+                return True
+            elif content_type == 'home_content' and 'orderby' in params:
+                # 跳转到首页内容的指定页面
+                result = self.forum_client.get_home_content(self.current_forum, params['orderby'], page)
+                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
+                return True
+
+        except Exception as e:
+            print(f"恢复到正确页面错误: {e}")
+
+        return False
 
     def display_threads_and_restore_focus(self, threads, pagination=None, content_type='thread_list'):
         """显示帖子列表并恢复焦点"""
         # 先显示内容
         self.display_threads(threads, pagination, content_type)
 
-        # 然后恢复焦点
-        if hasattr(self, 'previous_selected_index') and hasattr(self, 'previous_selected_tid'):
-            # 尝试通过tid找到对应的项目（只在实际的帖子中查找，不包括分页控制项）
+        # 恢复之前保存的索引
+        if self.saved_list_index != -1 and self.saved_list_index < self.list_ctrl.GetItemCount():
+            # 直接设置到保存的索引
+            self.list_ctrl.SetItemState(self.saved_list_index, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
+            self.list_ctrl.EnsureVisible(self.saved_list_index)
+            self.list_ctrl.SetFocus()
+
+            # 重置键盘游标位置到记忆的位置
+            # 这是解决上下光标浏览从记忆位置开始的关键
+            wx.CallAfter(self.reset_keyboard_cursor, self.saved_list_index)
+        elif hasattr(self, 'previous_selected_index') and hasattr(self, 'previous_selected_tid'):
+            # 回退到通过tid查找
             found_index = -1
             for i in range(self.list_ctrl.GetItemCount()):
                 item_tid = self.list_ctrl.GetItemData(i)
-                # 排除分页控制项（它们的TID是负数）
                 if item_tid > 0 and item_tid == self.previous_selected_tid:
                     found_index = i
                     break
 
             if found_index != -1:
-                # 选中之前的项目
                 self.list_ctrl.SetItemState(found_index, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
                 self.list_ctrl.EnsureVisible(found_index)
-                # 将焦点设置到列表上
                 self.list_ctrl.SetFocus()
-            else:
-                # 如果没找到，尝试通过索引恢复（但需要考虑分页控制项的影响）
-                # 计算实际的帖子数量（排除分页控制项）
-                actual_thread_count = len(threads)
-                if self.previous_selected_index < actual_thread_count:
-                    self.list_ctrl.SetItemState(self.previous_selected_index, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
-                    self.list_ctrl.EnsureVisible(self.previous_selected_index)
-                    self.list_ctrl.SetFocus()
+                # 重置键盘游标位置
+                wx.CallAfter(self.reset_keyboard_cursor, found_index)
 
     def get_user_nickname(self):
         """获取用户昵称"""
@@ -1121,11 +1246,20 @@ class MainFrame(wx.Frame):
                     'orderby': getattr(self, 'current_orderby', 'latest')
                 }
 
-                # 保存当前选中的项目索引
+                # 保存当前选中的项目索引和页面信息
                 selected = self.list_ctrl.GetNextItem(-1, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
                 if selected != -1:
                     self.previous_selected_index = selected
                     self.previous_selected_tid = self.list_ctrl.GetItemData(selected)
+                    # 保存当前索引和页面信息
+                    self.saved_list_index = selected
+
+                    # 保存当前页面信息，用于返回时精确定位
+                    self.saved_page_info = {
+                        'page': getattr(self, 'current_pagination', {}).get('page', 1),
+                        'content_type': getattr(self, 'current_content_type', ''),
+                        'params': self.get_current_page_params()
+                    }
 
             self.current_tid = tid
             result = self.forum_client.get_thread_detail(self.current_forum, tid)
@@ -1192,6 +1326,10 @@ class MainFrame(wx.Frame):
                 # 添加首页内容的分页支持
                 result = self.forum_client.get_home_content(self.current_forum, self.current_orderby, next_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
+            elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
+                # 添加帖子详情的分页支持
+                result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, next_page)
+                self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
 
         except Exception as e:
             print(f"加载下一页错误: {e}")
@@ -1268,18 +1406,21 @@ class MainFrame(wx.Frame):
         self.list_ctrl.DeleteAllItems()
         self.list_ctrl.InsertColumn(0, "内容", width=800)
 
-        # 如果是帖子详情，显示标题并设置内容类型
+        # 如果是帖子详情，设置内容类型但不改变标题
         if thread_info:
-            self.SetTitle(f"帖子详情: {thread_info.get('subject', '无标题')}")
             self.current_content_type = 'thread_detail'
             self.current_thread_info = thread_info
 
         self.current_posts = posts
         self.current_pagination = pagination or {}
-
+        
         for i, post in enumerate(posts):
-            # 获取楼层信息
-            floor = i + 1  # 楼层从1开始
+            # 获取楼层信息 - 需要考虑当前页码来计算正确的楼层
+            current_page = pagination.get('page', 1) if pagination else 1
+            posts_per_page = 20  # 假设每页显示20条
+            floor_offset = (current_page - 1) * posts_per_page
+            floor = i + 1 + floor_offset  # 实际楼层
+
             username = post.get('username', '')
             content = self.clean_html_tags(post.get('message', ''))
             create_date = post.get('create_date_fmt', '')
@@ -1300,9 +1441,16 @@ class MainFrame(wx.Frame):
         # 如果没有分页信息，创建默认分页信息
         if not pagination or not isinstance(pagination, dict):
             pagination = {'page': 1, 'totalpage': 1}
+        else:
+            pass  # 使用传入的分页信息
 
         # 总是添加分页控制，即使只有一页
         self.add_pagination_controls(pagination)
+
+        # 设置焦点到索引0（楼主），确保屏幕阅读器能朗读
+        if self.list_ctrl.GetItemCount() > 0:
+            # 使用游标重置方式设置楼主焦点
+            wx.CallAfter(self.reset_keyboard_cursor, 0)
 
     def load_previous_page(self):
         """加载上一页"""
@@ -1356,7 +1504,7 @@ class MainFrame(wx.Frame):
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
                 result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, prev_page)
-                self.display_posts(result.get('postlist', []), result.get('pagination', {}))
+                self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
 
         except Exception as e:
             print(f"加载上一页错误: {e}")
@@ -1438,7 +1586,7 @@ class MainFrame(wx.Frame):
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
                 result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, target_page)
-                self.display_posts(result.get('postlist', []), result.get('pagination', {}))
+                self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
 
         except Exception as e:
             print(f"页面跳转错误: {e}")
