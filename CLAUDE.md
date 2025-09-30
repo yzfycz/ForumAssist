@@ -194,6 +194,26 @@ Accounts stored in `config/forums.ini` (auto-created):
    - Implemented proper message ordering to show oldest messages first, newest at bottom
    - Added window maximization on application startup for better visibility
 
+9. **Thread Detail Pagination and Focus Management Fixes (2025-09-30)**
+   - Fixed critical thread detail pagination issue where multi-page threads only showed "page 1 of 1"
+   - Added auth parameter extraction from login response and passing to thread detail API calls
+   - Corrected pagination data extraction from API response (message.page/totalpage instead of message.pagination)
+   - Fixed floor numbering display to show actual floor numbers (21st floor, 22nd floor, etc.) on page 2+
+   - Implemented intelligent keyboard cursor position memory and restoration
+   - Enhanced screen reader compatibility with automatic focus on original post (index 0)
+   - Unified window title format across all functions: "论坛名字-<昵称>-论坛助手"
+   - Fixed title to remain constant when entering thread details instead of changing with each thread
+   - Cleaned up all debug console output for cleaner user experience
+   - Resolved syntax errors causing program startup failures due to indentation issues
+
+### Key Technical Improvements
+- **Auth Parameter Flow**: Added auth extraction in AuthenticationManager and passing to ForumClient for complete content access
+- **Focus Management System**: Implemented saved_list_index and saved_page_info for precise focus restoration
+- **Floor Calculation Logic**: Enhanced to consider current page number for correct floor display across multiple pages
+- **Pagination Data Pipeline**: Fixed data corruption issues between API response and display methods
+- **Title Format Standardization**: All functions now use consistent "forum-<nickname>-forum助手" format
+- **Code Cleanup**: Removed all debug print statements and fixed indentation errors
+
 ### Multi-Account Configuration Structure
 ```
 [Forum_争渡论坛]
