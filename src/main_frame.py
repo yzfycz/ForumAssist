@@ -1559,9 +1559,10 @@ class MainFrame(wx.Frame):
         self.current_conversation = messages
 
         for i, message in enumerate(messages):
-            content = message.get('message', '')
-            sender = message.get('sender', '')
-            time = message.get('time', '')
+            # 字段名映射：HTML解析器返回的是content、username、datetime
+            content = message.get('content', '')
+            sender = message.get('username', '')
+            time = message.get('datetime', '')
 
             if len(content) > 100:
                 content = content[:100] + '...'
