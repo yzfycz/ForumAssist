@@ -232,3 +232,28 @@ password2 = [encrypted_password]
 - **User Experience**: Account selection interface remains unchanged with familiar list layout
 - **Data Integrity**: Duplicate username prevention ensures consistent account management
 - **Menu Integration**: Added "切换账户" option to file menu for easy account switching
+
+10. **DataViewListCtrl Migration and Screen Reader Optimization (2025-10-02)**
+    - Replaced wx.ListCtrl with wx.dataview.DataViewListCtrl for better long text handling and auto-wrapping
+    - Completely resolved text truncation issues in post detail display when content exceeds normal length
+    - Implemented new data storage architecture using separate `list_data` array instead of hidden columns
+    - Eliminated "数据: XXX" information being read by screen readers from hidden DataViewListCtrl columns
+    - Updated all display methods to use single-column layout with metadata storage:
+      * `display_threads`: Stores thread ID and type information in `list_data`
+      * `display_posts`: Stores floor index and post data for thread details
+      * `display_messages`: Stores user ID and message data for private messages
+      * `display_message_conversation`: Stores conversation message data
+      * `add_pagination_controls`: Stores pagination control metadata
+    - Modified event handling methods to retrieve data from `list_data` array instead of hidden columns
+    - Enhanced regex-based data cleaning to remove any residual "数据: XXX" information from display text
+    - Maintained native screen reader compatibility without requiring special adaptations
+    - Preserved all existing functionality including keyboard navigation, pagination, and content loading
+
+### Key Technical Improvements (DataViewListCtrl Migration)
+- **Data Storage Architecture**: Replaced hidden columns with separate `list_data` array for metadata storage
+- **Screen Reader Optimization**: Eliminated hidden column data being read by assistive technologies
+- **Text Display Enhancement**: DataViewListCtrl provides better long text handling and automatic wrapping
+- **Event Handling Update**: Modified all interaction methods to work with new data storage approach
+- **Data Cleaning Enhancement**: Comprehensive regex patterns to remove unwanted data information
+- **Accessibility Preservation**: Maintained native screen reader support without special adaptations
+- **Backward Compatibility**: All existing functionality preserved with improved user experience

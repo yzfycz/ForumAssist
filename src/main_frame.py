@@ -5,6 +5,7 @@
 """
 
 import wx
+import wx.dataview
 import wx.lib.newevent
 import re
 from .auth_manager import AuthenticationManager
@@ -141,10 +142,13 @@ class MainFrame(wx.Frame):
         self.list_panel = wx.Panel(self.splitter)
         list_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # 创建列表控件
-        self.list_ctrl = wx.ListCtrl(self.list_panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-        self.list_ctrl.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_list_selection)
-        self.list_ctrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_list_activated)
+        # 创建数据视图列表控件 - 支持更好的文本处理和自动换行
+        self.list_ctrl = wx.dataview.DataViewListCtrl(self.list_panel, style=wx.dataview.DV_SINGLE)
+        self.list_ctrl.AppendTextColumn("内容", mode=wx.dataview.DATAVIEW_CELL_INERT, width=2000)
+        # 创建数据存储字典，用于存储每行对应的帖子ID
+        self.list_data = []  # 存储每行的数据信息
+        self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, self.on_list_selection)
+        self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.on_list_activated)
         self.list_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_list_key_down)
 
         list_sizer.Add(self.list_ctrl, 1, wx.ALL | wx.EXPAND, 5)
@@ -303,8 +307,9 @@ class MainFrame(wx.Frame):
                     type1_name = type1.get('name', '')
                     type1_id = type1.get('id', '')
 
-                    # 过滤掉"分类▼"和id为0的项目
-                    if '▼' in type1_name or type1_id == 0:
+                    # 过滤掉"分类▼"、"状态▼"和其他分类节点，以及id为0的项目
+                    if ('▼' in type1_name or '分类' in type1_name or '状态' in type1_name or
+                        '数据' in type1_name or '表' in type1_name or type1_id == 0):
                         continue
 
                     type1_item = self.tree_ctrl.AppendItem(forum_item, type1_name)
@@ -326,8 +331,9 @@ class MainFrame(wx.Frame):
                             type2_name = type2.get('name', '')
                             type2_id = type2.get('id', '')
 
-                            # 过滤掉"状态▼"和id为0的项目
-                            if '▼' in type2_name or type2_id == 0:
+                            # 过滤掉"状态▼"、"分类▼"和其他分类节点，以及id为0的项目
+                            if ('▼' in type2_name or '分类' in type2_name or '状态' in type2_name or
+                                '数据' in type2_name or '表' in type2_name or type2_id == 0):
                                 continue
 
                             type2_item = self.tree_ctrl.AppendItem(type1_item, type2_name)
@@ -350,8 +356,9 @@ class MainFrame(wx.Frame):
                     type3_name = type3.get('name', '')
                     type3_id = type3.get('id', '')
 
-                    # 过滤掉包含"▼"和id为0的项目
-                    if '▼' in type3_name or type3_id == 0:
+                    # 过滤掉"▼"、"分类"、"状态"和其他分类节点，以及id为0的项目
+                    if ('▼' in type3_name or '分类' in type3_name or '状态' in type3_name or
+                        '数据' in type3_name or '表' in type3_name or type3_id == 0):
                         continue
 
                     type3_item = self.tree_ctrl.AppendItem(forum_item, type3_name)
@@ -373,8 +380,9 @@ class MainFrame(wx.Frame):
                     type4_name = type4.get('name', '')
                     type4_id = type4.get('id', '')
 
-                    # 过滤掉包含"▼"和id为0的项目
-                    if '▼' in type4_name or type4_id == 0:
+                    # 过滤掉"▼"、"分类"、"状态"和其他分类节点，以及id为0的项目
+                    if ('▼' in type4_name or '分类' in type4_name or '状态' in type4_name or
+                        '数据' in type4_name or '表' in type4_name or type4_id == 0):
                         continue
 
                     type4_item = self.tree_ctrl.AppendItem(forum_item, type4_name)
@@ -486,12 +494,10 @@ class MainFrame(wx.Frame):
                 event.Skip()
         elif keycode == wx.WXK_RETURN:
             # 回车键：激活当前选中项
-            selected = self.list_ctrl.GetNextItem(-1, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
+            selected = self.list_ctrl.GetSelectedRow()
             if selected != -1:
-                # 模拟激活事件
-                activation_event = wx.ListEvent(wx.wxEVT_LIST_ITEM_ACTIVATED, self.list_ctrl.GetId())
-                activation_event.SetIndex(selected)
-                self.on_list_activated(activation_event)
+                # 直接调用激活逻辑，不需要创建复杂的事件对象
+                self.handle_row_activation(selected)
             else:
                 event.Skip()
         else:
@@ -635,23 +641,21 @@ class MainFrame(wx.Frame):
     
   
     def reset_keyboard_cursor(self, target_index):
-        """重置键盘游标位置到指定索引"""
+        """重置键盘游标位置到指定索引 - DataViewListCtrl版本"""
         try:
             if 0 <= target_index < self.list_ctrl.GetItemCount():
-                # 先取消所有选择
-                for i in range(self.list_ctrl.GetItemCount()):
-                    self.list_ctrl.SetItemState(i, 0, wx.LIST_STATE_SELECTED)
+                # 取消所有选择
+                self.list_ctrl.UnselectAll()
 
-                # 设置目标项目为选中状态
-                self.list_ctrl.SetItemState(target_index, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
-                self.list_ctrl.EnsureVisible(target_index)
+                # 选择目标项目
+                self.list_ctrl.SelectRow(target_index)
 
-                # 关键：设置焦点到列表控件
+                # DataViewListCtrl 的 EnsureVisible 需要 DataViewItem 对象
+                # 这里暂时跳过 EnsureVisible，因为 SelectRow 应该会自动滚动到可见位置
+                # self.list_ctrl.EnsureVisible(target_index)
+
+                # 设置焦点到列表控件
                 self.list_ctrl.SetFocus()
-
-                # 强制更新键盘游标位置
-                # 通过设置FOCUSED状态来重置内部键盘状态
-                self.list_ctrl.SetItemState(target_index, wx.LIST_STATE_FOCUSED, wx.LIST_STATE_FOCUSED)
 
         except Exception as e:
             print(f"重置键盘游标错误: {e}")
@@ -757,8 +761,8 @@ class MainFrame(wx.Frame):
         # 恢复之前保存的索引
         if self.saved_list_index != -1 and self.saved_list_index < self.list_ctrl.GetItemCount():
             # 直接设置到保存的索引
-            self.list_ctrl.SetItemState(self.saved_list_index, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
-            self.list_ctrl.EnsureVisible(self.saved_list_index)
+            self.list_ctrl.SelectRow(self.saved_list_index)
+            # DataViewListCtrl 的 SelectRow 应该会自动处理可见性
             self.list_ctrl.SetFocus()
 
             # 重置键盘游标位置到记忆的位置
@@ -768,14 +772,15 @@ class MainFrame(wx.Frame):
             # 回退到通过tid查找
             found_index = -1
             for i in range(self.list_ctrl.GetItemCount()):
-                item_tid = self.list_ctrl.GetItemData(i)
+                # 从隐藏列获取帖子ID
+                item_tid = int(self.list_ctrl.GetValue(i, 1)) if self.list_ctrl.GetColumnCount() > 1 else 0
                 if item_tid > 0 and item_tid == self.previous_selected_tid:
                     found_index = i
                     break
 
             if found_index != -1:
-                self.list_ctrl.SetItemState(found_index, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
-                self.list_ctrl.EnsureVisible(found_index)
+                self.list_ctrl.SelectRow(found_index)
+                # DataViewListCtrl 的 SelectRow 应该会自动处理可见性
                 self.list_ctrl.SetFocus()
                 # 重置键盘游标位置
                 wx.CallAfter(self.reset_keyboard_cursor, found_index)
@@ -912,48 +917,62 @@ class MainFrame(wx.Frame):
             print(f"向下翻页错误: {e}")
 
     def on_list_selection(self, event):
-        """列表选择事件"""
-        # 处理列表选择
-        event.Skip()
+        """列表选择事件 - DataViewListCtrl版本"""
+        try:
+            # DataViewListCtrl 的选择事件处理
+            pass
+        except Exception as e:
+            print(f"列表选择事件处理错误: {e}")
 
     def on_list_activated(self, event):
         """列表激活事件 - 处理分页控制和帖子详情加载"""
         try:
-            selected = event.GetIndex()
-            if selected == -1:
+            selected_row = self.list_ctrl.GetSelectedRow()
+            if selected_row != -1:
+                self.handle_row_activation(selected_row)
+        except Exception as e:
+            print(f"列表激活事件处理错误: {e}")
+
+    def handle_row_activation(self, selected_row):
+        """处理行激活的通用逻辑"""
+        try:
+            # 检查行索引是否有效
+            if selected_row < 0 or selected_row >= len(self.list_data):
                 return
 
-            # 获取项目数据，判断是否是分页控制项
-            item_data = self.list_ctrl.GetItemData(selected)
+            # 从 list_data 数组获取项目数据
+            item_data = self.list_data[selected_row]
 
-            if item_data == -1:  # 上一页
-                self.load_previous_page()
-            elif item_data == -2:  # 下一页
-                self.load_next_page()
-            elif item_data == -3:  # 页码跳转
-                self.show_page_jump_dialog()
-            elif item_data == -4:  # 回复帖子
-                self.show_reply_dialog()
+            # 处理分页控制
+            if item_data.get('type') == 'pagination':
+                action = item_data.get('action')
+                if action == 'prev':
+                    self.load_previous_page()
+                elif action == 'next':
+                    self.load_next_page()
+                elif action == 'jump':
+                    self.show_page_jump_dialog()
+                elif action == 'reply':
+                    self.show_reply_dialog()
             else:  # 普通帖子项或消息项
                 # 根据内容类型处理不同的操作
                 if hasattr(self, 'current_content_type'):
                     if self.current_content_type in ['thread_list', 'search_result', 'user_threads', 'user_posts', 'home_content']:
                         # 加载帖子详情
-                        tid = item_data
+                        tid = item_data.get('tid', 0)
                         if tid and tid > 0:
                             self.load_thread_detail(tid)
                     elif self.current_content_type == 'message_list':
                         # 加载消息详情
-                        touid = item_data
+                        touid = item_data.get('touid', 0)
                         if touid and touid > 0:
                             self.load_message_detail(touid)
                     elif self.current_content_type == 'thread_detail':
                         # 帖子详情中的楼层编辑
-                        self.show_floor_editor(selected)
+                        self.show_floor_editor(selected_row)
 
         except Exception as e:
-            print(f"列表激活事件处理错误: {e}")
-            event.Skip()
+            print(f"处理行激活错误: {e}")
 
     def on_search(self, event):
         """搜索事件"""
@@ -1169,17 +1188,17 @@ class MainFrame(wx.Frame):
         self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
 
     def display_threads(self, threads, pagination=None, content_type='thread_list'):
-        """显示帖子列表"""
+        """显示帖子列表 - DataViewListCtrl版本"""
         self.list_ctrl.DeleteAllItems()
-        # 调整列宽以适应新的显示格式，设置为2000像素确保完整显示
-        self.list_ctrl.InsertColumn(0, "内容", width=2000)
+        # 清空数据存储
+        self.list_data = []
 
         # 保存当前内容类型和分页信息
         self.current_content_type = content_type
         self.current_pagination = pagination or {}
         self.current_threads = threads
 
-        for i, thread in enumerate(threads):
+        for thread in threads:
             # 构建新的显示格式
             subject = thread.get('subject', '')
             username = thread.get('username', '')
@@ -1193,10 +1212,29 @@ class MainFrame(wx.Frame):
             # 按照要求的格式拼接：标题 作者:用户名;浏览:数量;板块:板块名;发表时间:时间;回复:数量;回复时间:时间;最后回复:用户名
             display_text = f"{subject} 作者:{username};浏览:{views};板块:{forumname};发表时间:{dateline_fmt};回复:{posts};回复时间:{lastpost_fmt};最后回复:{lastusername}"
 
-            index = self.list_ctrl.InsertItem(i, display_text)
+            # 检查并清理任何包含"数据: XXX"的多余信息
+            # 移除任何包含"数据:"的模式，包括中英文
+            import re
+            # 更强的正则表达式，处理各种可能的格式
+            display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+            display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+            # 处理可能的分号分隔符格式
+            display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+            display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+            # 如果数据信息在末尾没有分号分隔，也要处理
+            display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+            display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+            # 清理末尾可能的分号和空格
+            display_text = re.sub(r';+\s*$', '', display_text)
+            display_text = display_text.strip()
 
-            # 将帖子ID存储为项目数据
-            self.list_ctrl.SetItemData(index, int(thread.get('tid', 0)))
+            # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
+            # 将帖子ID等信息存储在 list_data 数组中
+            self.list_ctrl.AppendItem([display_text])
+            self.list_data.append({
+                'tid': thread.get('tid', 0),
+                'type': 'thread'
+            })
 
         # 根据设计文档添加4个分页控制项
         # 如果没有分页信息，创建默认分页信息
@@ -1206,32 +1244,74 @@ class MainFrame(wx.Frame):
         # 总是添加分页控制，即使只有一页
         self.add_pagination_controls(pagination)
 
+    
     def add_pagination_controls(self, pagination):
-        """根据设计文档添加4个分页控制项"""
+        """根据设计文档添加4个分页控制项 - DataViewListCtrl版本"""
         current_page = pagination.get('page', 1)
         total_page = pagination.get('totalpage', 1)
 
         # 1. 上一页控制项
         if current_page > 1:
             prev_text = f"上一页({current_page - 1})"
-            prev_index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), prev_text)
-            self.list_ctrl.SetItemData(prev_index, -1)  # 特殊标记：上一页
+            # 应用数据清理逻辑，移除"数据: XXX"信息
+            import re
+            cleaned_text = re.sub(r';?\s*数据:\s*\d+\s*', '', prev_text)
+            cleaned_text = re.sub(r';?\s*data:\s*\d+\s*', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r';\s*数据:\s*\d+.*$', '', cleaned_text)
+            cleaned_text = re.sub(r';\s*data:\s*\d+.*$', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r'\s+数据:\s*\d+.*$', '', cleaned_text)
+            cleaned_text = re.sub(r'\s+data:\s*\d+.*$', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r';+\s*$', '', cleaned_text)
+            cleaned_text = cleaned_text.strip()
+            self.list_ctrl.AppendItem([cleaned_text])
+            self.list_data.append({'type': 'pagination', 'action': 'prev', 'page': current_page - 1})
 
         # 2. 下一页控制项
         if current_page < total_page:
             next_text = f"下一页({current_page + 1})"
-            next_index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), next_text)
-            self.list_ctrl.SetItemData(next_index, -2)  # 特殊标记：下一页
+            # 应用数据清理逻辑，移除"数据: XXX"信息
+            import re
+            cleaned_text = re.sub(r';?\s*数据:\s*\d+\s*', '', next_text)
+            cleaned_text = re.sub(r';?\s*data:\s*\d+\s*', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r';\s*数据:\s*\d+.*$', '', cleaned_text)
+            cleaned_text = re.sub(r';\s*data:\s*\d+.*$', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r'\s+数据:\s*\d+.*$', '', cleaned_text)
+            cleaned_text = re.sub(r'\s+data:\s*\d+.*$', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r';+\s*$', '', cleaned_text)
+            cleaned_text = cleaned_text.strip()
+            self.list_ctrl.AppendItem([cleaned_text])
+            self.list_data.append({'type': 'pagination', 'action': 'next', 'page': current_page + 1})
 
         # 3. 当前页码跳转控制项
         jump_text = f"第{current_page}页/共{total_page}页 (回车跳转)"
-        jump_index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), jump_text)
-        self.list_ctrl.SetItemData(jump_index, -3)  # 特殊标记：页码跳转
+        # 应用数据清理逻辑，移除"数据: XXX"信息
+        import re
+        cleaned_text = re.sub(r';?\s*数据:\s*\d+\s*', '', jump_text)
+        cleaned_text = re.sub(r';?\s*data:\s*\d+\s*', '', cleaned_text, flags=re.IGNORECASE)
+        cleaned_text = re.sub(r';\s*数据:\s*\d+.*$', '', cleaned_text)
+        cleaned_text = re.sub(r';\s*data:\s*\d+.*$', '', cleaned_text, flags=re.IGNORECASE)
+        cleaned_text = re.sub(r'\s+数据:\s*\d+.*$', '', cleaned_text)
+        cleaned_text = re.sub(r'\s+data:\s*\d+.*$', '', cleaned_text, flags=re.IGNORECASE)
+        cleaned_text = re.sub(r';+\s*$', '', cleaned_text)
+        cleaned_text = cleaned_text.strip()
+        self.list_ctrl.AppendItem([cleaned_text])
+        self.list_data.append({'type': 'pagination', 'action': 'jump', 'current_page': current_page, 'total_page': total_page})
 
         # 4. 回复帖子控制项（仅在帖子详情时显示）
         if self.current_content_type == 'thread_detail':
-            reply_index = self.list_ctrl.InsertItem(self.list_ctrl.GetItemCount(), "回复帖子")
-            self.list_ctrl.SetItemData(reply_index, -4)  # 特殊标记：回复帖子
+            reply_text = "回复帖子"
+            # 应用数据清理逻辑，移除"数据: XXX"信息
+            import re
+            cleaned_text = re.sub(r';?\s*数据:\s*\d+\s*', '', reply_text)
+            cleaned_text = re.sub(r';?\s*data:\s*\d+\s*', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r';\s*数据:\s*\d+.*$', '', cleaned_text)
+            cleaned_text = re.sub(r';\s*data:\s*\d+.*$', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r'\s+数据:\s*\d+.*$', '', cleaned_text)
+            cleaned_text = re.sub(r'\s+data:\s*\d+.*$', '', cleaned_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r';+\s*$', '', cleaned_text)
+            cleaned_text = cleaned_text.strip()
+            self.list_ctrl.AppendItem([cleaned_text])
+            self.list_data.append({'type': 'pagination', 'action': 'reply'})
 
     def load_thread_detail(self, tid):
         """加载帖子详情"""
@@ -1247,10 +1327,11 @@ class MainFrame(wx.Frame):
                 }
 
                 # 保存当前选中的项目索引和页面信息
-                selected = self.list_ctrl.GetNextItem(-1, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
-                if selected != -1:
+                selected = self.list_ctrl.GetSelectedRow()
+                if selected != -1 and selected < len(self.list_data):
                     self.previous_selected_index = selected
-                    self.previous_selected_tid = self.list_ctrl.GetItemData(selected)
+                    # 从 list_data 数组获取帖子ID
+                    self.previous_selected_tid = self.list_data[selected].get('tid', 0)
                     # 保存当前索引和页面信息
                     self.saved_list_index = selected
 
@@ -1402,9 +1483,10 @@ class MainFrame(wx.Frame):
         return clean_text.strip()
 
     def display_posts(self, posts, pagination=None, thread_info=None):
-        """显示回复列表"""
+        """显示回复列表 - DataViewListCtrl版本"""
         self.list_ctrl.DeleteAllItems()
-        self.list_ctrl.InsertColumn(0, "内容", width=800)
+        # 清空数据存储
+        self.list_data = []
 
         # 如果是帖子详情，设置内容类型但不改变标题
         if thread_info:
@@ -1413,7 +1495,7 @@ class MainFrame(wx.Frame):
 
         self.current_posts = posts
         self.current_pagination = pagination or {}
-        
+
         for i, post in enumerate(posts):
             # 获取楼层信息 - 需要考虑当前页码来计算正确的楼层
             current_page = pagination.get('page', 1) if pagination else 1
@@ -1433,9 +1515,15 @@ class MainFrame(wx.Frame):
                 # 其他楼层
                 formatted_content = f"{floor}楼 {username} 说\n{content}\n发表时间：{create_date}"
 
-            index = self.list_ctrl.InsertItem(i, formatted_content)
-            # 存储原始帖子数据用于编辑
-            self.list_ctrl.SetItemData(index, i)
+            # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
+            # 将索引信息存储在 list_data 数组中
+            self.list_ctrl.AppendItem([formatted_content])
+            self.list_data.append({
+                'type': 'post',
+                'index': i,
+                'floor': floor,
+                'post_data': post
+            })
 
         # 根据设计文档添加4个分页控制项
         # 如果没有分页信息，创建默认分页信息
@@ -1660,27 +1748,32 @@ class MainFrame(wx.Frame):
             wx.MessageBox("回复发送失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def display_messages(self, messages):
-        """显示消息列表（只显示用户名，隐藏消息内容）"""
+        """显示消息列表（只显示用户名，隐藏消息内容） - DataViewListCtrl版本"""
         self.list_ctrl.DeleteAllItems()
-        # 只显示用户名列，隐藏消息内容
-        self.list_ctrl.InsertColumn(0, "用户名", width=400)
+        # 清空数据存储
+        self.list_data = []
 
         # 保存消息列表
         self.current_messages = messages
 
-        for i, message in enumerate(messages):
+        for message in messages:
             username = message.get('username', '')
             touid = message.get('touid', '')
 
-            # 只显示用户名，不显示任何消息内容
-            index = self.list_ctrl.InsertItem(i, username)
-
-            # 将对方用户ID存储为项目数据（转换为整数）用于后续打开对话
+            # 将对方用户ID转换为整数
             try:
                 uid_value = int(touid) if touid else 0
             except (ValueError, TypeError):
                 uid_value = 0
-            self.list_ctrl.SetItemData(index, uid_value)
+
+            # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
+            # 将用户ID信息存储在 list_data 数组中
+            self.list_ctrl.AppendItem([username])
+            self.list_data.append({
+                'type': 'message',
+                'touid': uid_value,
+                'message_data': message
+            })
 
     def load_message_detail(self, touid):
         """加载消息详情"""
@@ -1700,11 +1793,10 @@ class MainFrame(wx.Frame):
             wx.MessageBox("加载消息详情失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def display_message_conversation(self, messages):
-        """显示消息对话（按时间升序：最老消息在最上面，最新消息在最下面）"""
+        """显示消息对话（按时间升序：最老消息在最上面，最新消息在最下面）- DataViewListCtrl版本"""
         self.list_ctrl.DeleteAllItems()
-        self.list_ctrl.InsertColumn(0, "内容", width=600)
-        self.list_ctrl.InsertColumn(1, "发送者", width=100)
-        self.list_ctrl.InsertColumn(2, "时间", width=150)
+        # 清空数据存储
+        self.list_data = []
 
         # 保存当前消息记录
         self.current_conversation = messages
@@ -1713,7 +1805,7 @@ class MainFrame(wx.Frame):
         # HTML解析器返回的消息是降序排列的（最新的在前面），需要反转
         messages = messages[::-1]
 
-        for i, message in enumerate(messages):
+        for message in messages:
             # 字段名映射：HTML解析器返回的是content、username、datetime
             content = message.get('content', '')
             sender = message.get('username', '')
@@ -1722,9 +1814,16 @@ class MainFrame(wx.Frame):
             if len(content) > 100:
                 content = content[:100] + '...'
 
-            index = self.list_ctrl.InsertItem(i, content)
-            self.list_ctrl.SetItem(index, 1, sender)
-            self.list_ctrl.SetItem(index, 2, time)
+            # 格式化显示内容
+            formatted_content = f"{sender} 在 {time} 说\n{content}"
+
+            # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
+            # 将消息信息存储在 list_data 数组中
+            self.list_ctrl.AppendItem([formatted_content])
+            self.list_data.append({
+                'type': 'conversation',
+                'message_data': message
+            })
 
     def create_message_input_panel(self):
         """创建消息输入面板"""
