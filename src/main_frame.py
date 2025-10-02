@@ -1218,14 +1218,15 @@ class MainFrame(wx.Frame):
 
             if first_content_page > 1:
                 try:
-                print(f"DEBUG: 找到有内容的第一页: 第{first_content_page}页")
-            except Exception as e:
-                print(f"DEBUG: 找到有内容的第一页编码错误: {e}")
+                    print(f"DEBUG: 找到有内容的第一页: 第{first_content_page}页")
+                except Exception as e:
+                    print(f"DEBUG: 找到有内容的第一页编码错误: {e}")
+
                 result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params, first_content_page)
                 try:
-                        print(f"DEBUG: 第{first_content_page}页结果: {result}")
-                    except Exception as e:
-                        print(f"DEBUG: 第{first_content_page}页结果编码错误: {e}")
+                    print(f"DEBUG: 第{first_content_page}页结果: {result}")
+                except Exception as e:
+                    print(f"DEBUG: 第{first_content_page}页结果编码错误: {e}")
 
                 # 保存偏移信息，用于显示逻辑
                 pagination['page_offset'] = first_content_page - 1
@@ -1245,7 +1246,10 @@ class MainFrame(wx.Frame):
     def _find_first_content_page(self, api_params, total_page):
         """使用二分查找快速定位有内容的第一页"""
         try:
-            print(f"DEBUG: 开始二分查找，总页数: {total_page}")
+            try:
+                print(f"DEBUG: 开始二分查找，总页数: {total_page}")
+            except Exception as e:
+                print(f"DEBUG: 开始二分查找编码错误: {e}")
 
             left = 1
             right = total_page
@@ -1253,69 +1257,82 @@ class MainFrame(wx.Frame):
 
             while left <= right:
                 mid = (left + right) // 2
-                print(f"DEBUG: 检查第{mid}页...")
-
-                # 检查中间页是否有内容
-                result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params, mid)
                 try:
-                    print(f"DEBUG: 第{mid}页API返回: {result}")
+                    print(f"DEBUG: 检查第{mid}页...")
                 except Exception as e:
-                    print(f"DEBUG: 第{mid}页API返回编码错误: {e}")
+                    print(f"DEBUG: 检查页码信息编码错误: {e}")
 
-                if result and isinstance(result, dict):
-                    # 检查不同的可能结果结构
-                    if result.get('result') == 1:
-                        # 新版本API结构
-                        threadlist = result.get('message', {}).get('threadlist', [])
-                    elif 'threadlist' in result:
-                        # 旧版本API结构
-                        threadlist = result.get('threadlist', [])
+                try:
+                    # 检查中间页是否有内容
+                    result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params, mid)
+
+                    try:
+                        print(f"DEBUG: 第{mid}页API返回: {result}")
+                    except Exception as e:
+                        print(f"DEBUG: 第{mid}页API返回编码错误: {e}")
+
+                    if result and isinstance(result, dict):
+                        # 检查不同的可能结果结构
+                        if result.get('result') == 1:
+                            # 新版本API结构
+                            threadlist = result.get('message', {}).get('threadlist', [])
+                        elif 'threadlist' in result:
+                            # 旧版本API结构
+                            threadlist = result.get('threadlist', [])
+                        else:
+                            try:
+                                print(f"DEBUG: 第{mid}页未知API结构，向右查找")
+                            except Exception as e:
+                                print(f"DEBUG: 第{mid}页未知API结构编码错误: {e}")
+                            left = mid + 1
+                            continue
+
+                        if threadlist:  # 找到有内容的页面
+                            first_content_page = mid
+                            right = mid - 1  # 继续向左查找更早的有内容页面
+                            try:
+                                print(f"DEBUG: 第{mid}页有内容({len(threadlist)}个帖子)，继续向左查找")
+                            except Exception as e:
+                                print(f"DEBUG: 第{mid}页有内容信息编码错误: {e}")
+                        else:  # 没有内容，向右查找
+                            left = mid + 1
+                            try:
+                                print(f"DEBUG: 第{mid}页无内容，向右查找")
+                            except Exception as e:
+                                print(f"DEBUG: 第{mid}页无内容信息编码错误: {e}")
                     else:
                         try:
-                        print(f"DEBUG: 第{mid}页未知API结构，向右查找")
-                    except Exception as e:
-                        print(f"DEBUG: 第{mid}页未知API结构编码错误: {e}")
+                            print(f"DEBUG: 第{mid}页API调用失败或返回格式错误，向右查找")
+                        except Exception as e:
+                            print(f"DEBUG: 第{mid}页API调用失败信息编码错误: {e}")
                         left = mid + 1
-                        continue
 
-                    if threadlist:  # 找到有内容的页面
-                        first_content_page = mid
-                        right = mid - 1  # 继续向左查找更早的有内容页面
-                        try:
-                            print(f"DEBUG: 第{mid}页有内容({len(threadlist)}个帖子)，继续向左查找")
-                        except Exception as e:
-                            print(f"DEBUG: 第{mid}页有内容信息编码错误: {e}")
-                    else:  # 没有内容，向右查找
-                        left = mid + 1
-                        try:
-                            print(f"DEBUG: 第{mid}页无内容，向右查找")
-                        except Exception as e:
-                            print(f"DEBUG: 第{mid}页无内容信息编码错误: {e}")
-                else:
+                except Exception as page_check_e:
+                    # 处理单个页面检查时的异常（包括编码异常）
                     try:
-                    print(f"DEBUG: 第{mid}页API调用失败或返回格式错误，向右查找")
-                except Exception as e:
-                    print(f"DEBUG: 第{mid}页API调用失败信息编码错误: {e}")
-                    left = mid + 1
+                        print(f"DEBUG: 第{mid}页检查时出错: {page_check_e}")
+                    except Exception as encoding_e:
+                        print(f"DEBUG: 第{mid}页检查出错编码错误: {encoding_e}")
+                    left = mid + 1  # 出错时向右查找
 
             if first_content_page <= total_page:
                 try:
-                print(f"DEBUG: 找到有内容的第一页: 第{first_content_page}页")
-            except Exception as e:
-                print(f"DEBUG: 找到有内容的第一页编码错误: {e}")
+                    print(f"DEBUG: 找到有内容的第一页: 第{first_content_page}页")
+                except Exception as e:
+                    print(f"DEBUG: 找到有内容的第一页编码错误: {e}")
                 return first_content_page
             else:
-               try:
-                print(f"DEBUG: 所有页面都没有内容，返回第1页")
-            except Exception as e:
-                print(f"DEBUG: 所有页面都没有内容信息编码错误: {e}")
+                try:
+                    print(f"DEBUG: 所有页面都没有内容，返回第1页")
+                except Exception as e:
+                    print(f"DEBUG: 所有页面都没有内容信息编码错误: {e}")
                 return 1
 
         except Exception as e:
             try:
-            print(f"DEBUG: 查找第一页内容时出错: {e}")
-        except Exception as encoding_e:
-            print(f"DEBUG: 查找第一页内容时出错编码错误: {encoding_e}")
+                print(f"DEBUG: 查找第一页内容时出错: {e}")
+            except Exception as encoding_e:
+                print(f"DEBUG: 查找第一页内容时出错编码错误: {encoding_e}")
             return 1  # 出错时返回第1页
 
     def search_content(self, keyword):
