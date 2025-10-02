@@ -321,3 +321,63 @@ class ConfigManager:
         """
         section_name = f"Forum_{forum_name}"
         return section_name in self.config
+
+    def get_setting(self, key, default_value=None):
+        """
+        获取软件设置项
+
+        Args:
+            key: 设置键名
+            default_value: 默认值
+
+        Returns:
+            设置值，如果不存在则返回默认值
+        """
+        section_name = "Settings"
+        if section_name not in self.config:
+            return default_value
+
+        return self.config[section_name].get(key, default_value)
+
+    def set_setting(self, key, value):
+        """
+        设置软件设置项
+
+        Args:
+            key: 设置键名
+            value: 设置值
+
+        Returns:
+            bool: 是否设置成功
+        """
+        try:
+            section_name = "Settings"
+            if section_name not in self.config:
+                self.config[section_name] = {}
+
+            self.config[section_name][key] = str(value)
+            self.save_config()
+            return True
+        except Exception as e:
+            return False
+
+    def get_show_list_numbers(self):
+        """
+        获取是否显示列表序号的设置
+
+        Returns:
+            bool: 是否显示列表序号
+        """
+        return self.get_setting("show_list_numbers", "false").lower() == "true"
+
+    def set_show_list_numbers(self, show):
+        """
+        设置是否显示列表序号
+
+        Args:
+            show: 是否显示列表序号
+
+        Returns:
+            bool: 是否设置成功
+        """
+        return self.set_setting("show_list_numbers", show)

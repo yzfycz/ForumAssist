@@ -358,3 +358,67 @@ The three-level hierarchy correctly represents the forum structure:
 - Confirmed tree view displays proper hierarchical structure with expandable nodes
 - Tested pagination functionality works correctly at all hierarchy levels
 - Validated keyboard navigation and screen reader compatibility maintained
+
+15. **List Numbering Feature Implementation (2025-10-03)**
+    - Added configurable list numbering system that displays item positions in all list views
+    - Implemented settings dialog with tabbed interface accessible via File → Settings menu
+    - Enhanced ConfigManager with generic settings management methods for future extensibility
+    - Added show_list_numbers configuration option stored in [Settings] section of config file
+    - Updated all display methods to support optional numbering with consistent formatting
+    - Implemented real-time list reloading when settings are changed for immediate effect
+    - Added comprehensive error handling for DataViewListCtrl operations to prevent crashes
+
+### Key Technical Improvements (List Numbering Feature)
+- **Settings Architecture**: Implemented tabbed settings dialog with software settings tab for future expansion
+- **Configuration Management**: Added generic get_setting() and set_setting() methods for managing application preferences
+- **Numbering Logic**: Position-based numbering calculated after all items (including pagination controls) are added
+- **Format Standardization**: All numbered items use consistent "，序号之总数项" format (e.g., "，1之24项")
+- **Performance Optimization**: List rebuilding only occurs when numbering is enabled to minimize overhead
+- **Error Handling**: Comprehensive try-catch blocks around DataViewListCtrl operations to handle API variations
+
+### Implementation Details
+**Settings Dialog Structure:**
+```
+Settings (Dialog)
+└── Software Settings (Tab)
+    └── [复选框] 显示列表序号
+        说明：启用后将在列表中创建包含序号的隐藏列，格式为'1之24项'等
+```
+
+**Numbering Format Examples:**
+- **Threads**: "测试标题 作者:张三;浏览:100;板块:技术讨论;发表时间:2025-01-01;回复:5;回复时间:2025-01-02;最后回复:李四 ，1之28项"
+- **Posts**: "楼主 张三 说\n这是内容\n发表时间：2025-01-01 ，1之24项"
+- **Messages**: "张三 ，1之10项"
+- **Pagination**: "上一页(1) ，25之28项", "下一页(2) ，26之28项"
+- **Page Jump**: "当前第1页共3页，回车输入页码跳转 ，27之28项"
+
+**Menu Structure:**
+```
+文件 (File)
+├── 切换账户 (保持原有位置)
+├── 用户管理 (保持原有位置)
+├── 设置 (新增) → 软件设置 → 显示列表序号
+└── 退出 (保持原有位置)
+```
+
+**Configuration Structure:**
+```ini
+[Settings]
+show_list_numbers = false  # 或 true
+```
+
+### Key Features
+- **Optional Display**: Numbering is disabled by default, enabled via settings dialog
+- **Comprehensive Coverage**: All list types support numbering (threads, posts, messages, conversations, pagination controls)
+- **Real-time Updates**: Settings changes take effect immediately without requiring application restart
+- **Accessibility Maintained**: All existing keyboard navigation and screen reader features preserved
+- **Error Resilience**: Robust error handling prevents application crashes due to data inconsistencies
+- **Future Extensible**: Settings architecture allows for easy addition of new configuration options
+
+### Testing Results
+- Verified settings dialog opens and functions correctly with proper sizer architecture
+- Confirmed numbering appears correctly in all list types with proper format
+- Tested real-time settings changes update lists immediately without requiring restart
+- Validated pagination controls are included in numbering (e.g., "，25之28项" for last pagination item)
+- Confirmed backward compatibility - existing functionality unchanged when numbering disabled
+- Tested error handling with malformed API responses and missing data fields

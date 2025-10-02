@@ -170,6 +170,9 @@ class MainFrame(wx.Frame):
         switch_account_item = file_menu.Append(wx.ID_ANY, "切换账户", "切换到其他账户")
         self.Bind(wx.EVT_MENU, self.on_switch_account, switch_account_item)
 
+        settings_item = file_menu.Append(wx.ID_ANY, "设置", "软件设置")
+        self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
+
         exit_item = file_menu.Append(wx.ID_EXIT, "退出", "退出程序")
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
 
@@ -1016,6 +1019,62 @@ class MainFrame(wx.Frame):
             # 显示账户选择界面
             self.show_account_selection()
 
+    def on_settings(self, event):
+        """设置事件"""
+        from .settings_dialog import SettingsDialog
+        dialog = SettingsDialog(self, self.config_manager)
+        dialog.ShowModal()
+
+        # 设置改变后，重新加载当前列表以应用新的设置
+        self.reload_current_list()
+
+        dialog.Destroy()
+
+    def reload_current_list(self):
+        """重新加载当前列表以应用设置变更"""
+        try:
+            # 根据当前内容类型重新加载列表
+            if hasattr(self, 'current_content_type'):
+                if self.current_content_type == 'thread_list':
+                    # 重新加载当前板块
+                    if hasattr(self, 'current_fid') and self.current_fid:
+                        self.load_forum_section_with_type(None, self.current_fid,
+                                                          self.current_api_params.get('typeid1'),
+                                                          self.current_api_params.get('typeid2'))
+                elif self.current_content_type == 'thread_detail':
+                    # 重新加载帖子详情
+                    if hasattr(self, 'current_thread_info') and self.current_thread_info:
+                        tid = self.current_thread_info.get('tid')
+                        if tid:
+                            self.load_thread_detail(tid)
+                elif self.current_content_type == 'home_content':
+                    # 重新加载首页内容
+                    if hasattr(self, 'current_orderby'):
+                        if self.current_orderby == 'latest':
+                            self.load_latest_threads_and_restore_focus()
+                        elif self.current_orderby == 'lastpost':
+                            self.load_latest_replies_and_restore_focus()
+                elif self.current_content_type == 'user_threads':
+                    # 重新加载我的发表
+                    self.load_my_threads_and_restore_focus()
+                elif self.current_content_type == 'user_posts':
+                    # 重新加载我的回复
+                    self.load_my_posts_and_restore_focus()
+                elif self.current_content_type == 'message_list':
+                    # 重新加载消息列表
+                    self.load_messages()
+                elif self.current_content_type == 'message_detail':
+                    # 重新加载消息详情
+                    if hasattr(self, 'current_touid') and self.current_touid:
+                        self.load_message_detail(self.current_touid)
+                elif self.current_content_type == 'search_result':
+                    # 重新加载搜索结果
+                    if hasattr(self, 'current_keyword') and self.current_keyword:
+                        self.search_content_and_restore_focus(self.current_keyword)
+        except Exception as e:
+            # 重新加载失败时不显示错误，保持用户体验
+            pass
+
     def on_exit(self, event):
         """退出事件"""
         self.Close()
@@ -1290,6 +1349,9 @@ class MainFrame(wx.Frame):
         # 保存API参数用于分页操作
         self.current_api_params = api_params or {}
 
+        # 检查是否需要显示列表序号
+        show_list_numbers = self.config_manager.get_show_list_numbers()
+
         for thread in threads:
             # 构建新的显示格式
             subject = thread.get('subject', '')
@@ -1323,10 +1385,14 @@ class MainFrame(wx.Frame):
             # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
             # 将帖子ID等信息存储在 list_data 数组中
             self.list_ctrl.AppendItem([display_text])
-            self.list_data.append({
+
+            # 构建存储的数据
+            thread_data = {
                 'tid': thread.get('tid', 0),
                 'type': 'thread'
-            })
+            }
+
+            self.list_data.append(thread_data)
 
         # 根据设计文档添加4个分页控制项
         # 如果没有分页信息，创建默认分页信息
@@ -1335,6 +1401,121 @@ class MainFrame(wx.Frame):
 
         # 总是添加分页控制，即使只有一页
         self.add_pagination_controls(pagination)
+
+        # 如果需要显示序号，使用重新构建列表的方式
+        if show_list_numbers:
+            total_items = len(self.list_data)  # 使用list_data的长度，因为已经包含了所有项
+            # 清空列表
+            self.list_ctrl.DeleteAllItems()
+            # 重新构建所有项目，这次包含序号
+            for i in range(total_items):
+                # 获取存储的数据
+                data = self.list_data[i]
+                if data['type'] == 'thread':
+                    # 帖子项目 - 构建包含序号的显示文本
+                    try:
+                        thread = self.current_threads[i] if i < len(self.current_threads) else {}
+                        subject = thread.get('subject', '')
+                        username = thread.get('username', '')
+                        views = thread.get('views', 0)
+                        forumname = thread.get('forumname', '')
+                        dateline_fmt = thread.get('dateline_fmt', '')
+                        posts = thread.get('posts', 0)
+                        lastpost_fmt = thread.get('lastpost_fmt', '')
+                        lastusername = thread.get('lastusername', '')
+
+                        display_text = f"{subject} 作者:{username};浏览:{views};板块:{forumname};发表时间:{dateline_fmt};回复:{posts};回复时间:{lastpost_fmt};最后回复:{lastusername} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"帖子数据加载失败 ，{i+1}之{total_items}项"
+
+                    # 清理多余信息
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                elif data['type'] == 'post':
+                    # 回复项目 - 构建包含序号的显示文本
+                    try:
+                        post_data = data.get('post_data', {})
+                        floor = data.get('floor', i + 1)
+                        username = post_data.get('username', '')
+                        content = self.clean_html_tags(post_data.get('message', ''))
+                        create_date = post_data.get('dateline_fmt', '')
+
+                        if floor == 1:
+                            formatted_content = f"楼主 {username} 说\n{content}\n发表时间：{create_date} ，{i+1}之{total_items}项"
+                        else:
+                            formatted_content = f"{floor}楼 {username} 说\n{content}\n发表时间：{create_date} ，{i+1}之{total_items}项"
+                        display_text = formatted_content
+                    except:
+                        display_text = f"回复数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'message':
+                    # 消息项目 - 构建包含序号的显示文本
+                    try:
+                        message_data = data.get('message_data', {})
+                        username = message_data.get('username', '')
+                        display_text = f"{username} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"消息数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'conversation':
+                    # 消息对话项目 - 构建包含序号的显示文本
+                    try:
+                        message_data = data.get('message_data', {})
+                        content = message_data.get('content', '')
+                        formatted_content = content
+
+                        if len(formatted_content) > 200:
+                            formatted_content = formatted_content[:200] + '...'
+                        display_text = f"{formatted_content} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"对话数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'pagination':
+                    # 分页控制项目 - 构建包含序号的显示文本
+                    action = data.get('action', '')
+                    page = data.get('page', 1)
+
+                    if action == 'prev':
+                        display_text = f"上一页({page}) ，{i+1}之{total_items}项"
+                    elif action == 'next':
+                        display_text = f"下一页({page}) ，{i+1}之{total_items}项"
+                    elif action == 'jump':
+                        current_page = self.current_pagination.get('page', 1)
+                        total_page = self.current_pagination.get('totalpage', 1)
+                        display_text = f"当前第{current_page}页共{total_page}页，回车输入页码跳转 ，{i+1}之{total_items}项"
+                    elif action == 'reply':
+                        display_text = f"回复帖子 ，{i+1}之{total_items}项"
+                    else:
+                        display_text = f"分页控制 ，{i+1}之{total_items}项"
+
+                    # 清理分页文本
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                else:
+                    # 其他类型的项目
+                    display_text = f"项目 ，{i+1}之{total_items}项"
+
+                # 重新添加到列表
+                self.list_ctrl.AppendItem([display_text])
+
+                # 在数据中存储序号信息
+                data['list_number'] = f"{i+1}之{total_items}项"
 
     
     def add_pagination_controls(self, pagination):
@@ -1614,6 +1795,9 @@ class MainFrame(wx.Frame):
         self.current_posts = posts
         self.current_pagination = pagination or {}
 
+        # 检查是否需要显示列表序号
+        show_list_numbers = self.config_manager.get_show_list_numbers()
+
         for i, post in enumerate(posts):
             # 获取楼层信息 - 需要考虑当前页码来计算正确的楼层
             current_page = pagination.get('page', 1) if pagination else 1
@@ -1636,12 +1820,16 @@ class MainFrame(wx.Frame):
             # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
             # 将索引信息存储在 list_data 数组中
             self.list_ctrl.AppendItem([formatted_content])
-            self.list_data.append({
+
+            # 构建存储的数据
+            post_data = {
                 'type': 'post',
-                'index': i,
+                'index': i,  # 保持从0开始的索引
                 'floor': floor,
                 'post_data': post
-            })
+            }
+
+            self.list_data.append(post_data)
 
         # 根据设计文档添加4个分页控制项
         # 如果没有分页信息，创建默认分页信息
@@ -1652,6 +1840,121 @@ class MainFrame(wx.Frame):
 
         # 总是添加分页控制，即使只有一页
         self.add_pagination_controls(pagination)
+
+        # 如果需要显示序号，使用重新构建列表的方式
+        if show_list_numbers:
+            total_items = len(self.list_data)  # 使用list_data的长度，因为已经包含了所有项
+            # 清空列表
+            self.list_ctrl.DeleteAllItems()
+            # 重新构建所有项目，这次包含序号
+            for i in range(total_items):
+                # 获取存储的数据
+                data = self.list_data[i]
+                if data['type'] == 'thread':
+                    # 帖子项目 - 构建包含序号的显示文本
+                    try:
+                        thread = self.current_threads[i] if i < len(self.current_threads) else {}
+                        subject = thread.get('subject', '')
+                        username = thread.get('username', '')
+                        views = thread.get('views', 0)
+                        forumname = thread.get('forumname', '')
+                        dateline_fmt = thread.get('dateline_fmt', '')
+                        posts = thread.get('posts', 0)
+                        lastpost_fmt = thread.get('lastpost_fmt', '')
+                        lastusername = thread.get('lastusername', '')
+
+                        display_text = f"{subject} 作者:{username};浏览:{views};板块:{forumname};发表时间:{dateline_fmt};回复:{posts};回复时间:{lastpost_fmt};最后回复:{lastusername} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"帖子数据加载失败 ，{i+1}之{total_items}项"
+
+                    # 清理多余信息
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                elif data['type'] == 'post':
+                    # 回复项目 - 构建包含序号的显示文本
+                    try:
+                        post_data = data.get('post_data', {})
+                        floor = data.get('floor', i + 1)
+                        username = post_data.get('username', '')
+                        content = self.clean_html_tags(post_data.get('message', ''))
+                        create_date = post_data.get('dateline_fmt', '')
+
+                        if floor == 1:
+                            formatted_content = f"楼主 {username} 说\n{content}\n发表时间：{create_date} ，{i+1}之{total_items}项"
+                        else:
+                            formatted_content = f"{floor}楼 {username} 说\n{content}\n发表时间：{create_date} ，{i+1}之{total_items}项"
+                        display_text = formatted_content
+                    except:
+                        display_text = f"回复数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'message':
+                    # 消息项目 - 构建包含序号的显示文本
+                    try:
+                        message_data = data.get('message_data', {})
+                        username = message_data.get('username', '')
+                        display_text = f"{username} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"消息数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'conversation':
+                    # 消息对话项目 - 构建包含序号的显示文本
+                    try:
+                        message_data = data.get('message_data', {})
+                        content = message_data.get('content', '')
+                        formatted_content = content
+
+                        if len(formatted_content) > 200:
+                            formatted_content = formatted_content[:200] + '...'
+                        display_text = f"{formatted_content} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"对话数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'pagination':
+                    # 分页控制项目 - 构建包含序号的显示文本
+                    action = data.get('action', '')
+                    page = data.get('page', 1)
+
+                    if action == 'prev':
+                        display_text = f"上一页({page}) ，{i+1}之{total_items}项"
+                    elif action == 'next':
+                        display_text = f"下一页({page}) ，{i+1}之{total_items}项"
+                    elif action == 'jump':
+                        current_page = self.current_pagination.get('page', 1)
+                        total_page = self.current_pagination.get('totalpage', 1)
+                        display_text = f"当前第{current_page}页共{total_page}页，回车输入页码跳转 ，{i+1}之{total_items}项"
+                    elif action == 'reply':
+                        display_text = f"回复帖子 ，{i+1}之{total_items}项"
+                    else:
+                        display_text = f"分页控制 ，{i+1}之{total_items}项"
+
+                    # 清理分页文本
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                else:
+                    # 其他类型的项目
+                    display_text = f"项目 ，{i+1}之{total_items}项"
+
+                # 重新添加到列表
+                self.list_ctrl.AppendItem([display_text])
+
+                # 在数据中存储序号信息
+                data['list_number'] = f"{i+1}之{total_items}项"
 
         # 设置焦点到索引0（楼主），确保屏幕阅读器能朗读
         if self.list_ctrl.GetItemCount() > 0:
@@ -2032,7 +2335,10 @@ class MainFrame(wx.Frame):
         # 保存消息列表
         self.current_messages = messages
 
-        for message in messages:
+        # 检查是否需要显示列表序号
+        show_list_numbers = self.config_manager.get_show_list_numbers()
+
+        for i, message in enumerate(messages):
             username = message.get('username', '')
             touid = message.get('touid', '')
 
@@ -2042,14 +2348,136 @@ class MainFrame(wx.Frame):
             except (ValueError, TypeError):
                 uid_value = 0
 
+            # 构建显示文本
+            display_text = username
+
             # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
             # 将用户ID信息存储在 list_data 数组中
-            self.list_ctrl.AppendItem([username])
-            self.list_data.append({
+            self.list_ctrl.AppendItem([display_text])
+
+            # 构建存储的数据
+            message_data = {
                 'type': 'message',
                 'touid': uid_value,
                 'message_data': message
-            })
+            }
+
+            self.list_data.append(message_data)
+
+        # 如果需要显示序号，使用重新构建列表的方式
+        if show_list_numbers:
+            total_items = len(self.list_data)  # 使用list_data的长度，因为已经包含了所有项
+            # 清空列表
+            self.list_ctrl.DeleteAllItems()
+            # 重新构建所有项目，这次包含序号
+            for i in range(total_items):
+                # 获取存储的数据
+                data = self.list_data[i]
+                if data['type'] == 'thread':
+                    # 帖子项目 - 构建包含序号的显示文本
+                    try:
+                        thread = self.current_threads[i] if i < len(self.current_threads) else {}
+                        subject = thread.get('subject', '')
+                        username = thread.get('username', '')
+                        views = thread.get('views', 0)
+                        forumname = thread.get('forumname', '')
+                        dateline_fmt = thread.get('dateline_fmt', '')
+                        posts = thread.get('posts', 0)
+                        lastpost_fmt = thread.get('lastpost_fmt', '')
+                        lastusername = thread.get('lastusername', '')
+
+                        display_text = f"{subject} 作者:{username};浏览:{views};板块:{forumname};发表时间:{dateline_fmt};回复:{posts};回复时间:{lastpost_fmt};最后回复:{lastusername} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"帖子数据加载失败 ，{i+1}之{total_items}项"
+
+                    # 清理多余信息
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                elif data['type'] == 'post':
+                    # 回复项目 - 构建包含序号的显示文本
+                    try:
+                        post_data = data.get('post_data', {})
+                        floor = data.get('floor', i + 1)
+                        username = post_data.get('username', '')
+                        content = self.clean_html_tags(post_data.get('message', ''))
+                        create_date = post_data.get('dateline_fmt', '')
+
+                        if floor == 1:
+                            formatted_content = f"楼主 {username} 说\n{content}\n发表时间：{create_date} ，{i+1}之{total_items}项"
+                        else:
+                            formatted_content = f"{floor}楼 {username} 说\n{content}\n发表时间：{create_date} ，{i+1}之{total_items}项"
+                        display_text = formatted_content
+                    except:
+                        display_text = f"回复数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'message':
+                    # 消息项目 - 构建包含序号的显示文本
+                    try:
+                        message_data = data.get('message_data', {})
+                        username = message_data.get('username', '')
+                        display_text = f"{username} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"消息数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'conversation':
+                    # 消息对话项目 - 构建包含序号的显示文本
+                    try:
+                        message_data = data.get('message_data', {})
+                        content = message_data.get('content', '')
+                        formatted_content = content
+
+                        if len(formatted_content) > 200:
+                            formatted_content = formatted_content[:200] + '...'
+                        display_text = f"{formatted_content} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"对话数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'pagination':
+                    # 分页控制项目 - 构建包含序号的显示文本
+                    action = data.get('action', '')
+                    page = data.get('page', 1)
+
+                    if action == 'prev':
+                        display_text = f"上一页({page}) ，{i+1}之{total_items}项"
+                    elif action == 'next':
+                        display_text = f"下一页({page}) ，{i+1}之{total_items}项"
+                    elif action == 'jump':
+                        current_page = self.current_pagination.get('page', 1)
+                        total_page = self.current_pagination.get('totalpage', 1)
+                        display_text = f"当前第{current_page}页共{total_page}页，回车输入页码跳转 ，{i+1}之{total_items}项"
+                    elif action == 'reply':
+                        display_text = f"回复帖子 ，{i+1}之{total_items}项"
+                    else:
+                        display_text = f"分页控制 ，{i+1}之{total_items}项"
+
+                    # 清理分页文本
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                else:
+                    # 其他类型的项目
+                    display_text = f"项目 ，{i+1}之{total_items}项"
+
+                # 重新添加到列表
+                self.list_ctrl.AppendItem([display_text])
+
+                # 在数据中存储序号信息
+                data['list_number'] = f"{i+1}之{total_items}项"
 
     def load_message_detail(self, touid):
         """加载消息详情"""
@@ -2080,7 +2508,10 @@ class MainFrame(wx.Frame):
         # HTML解析器返回的消息是降序排列的（最新的在前面），需要反转
         messages = messages[::-1]
 
-        for message in messages:
+        # 检查是否需要显示列表序号
+        show_list_numbers = self.config_manager.get_show_list_numbers()
+
+        for i, message in enumerate(messages):
             # 字段名映射：HTML解析器返回的是content、username、datetime
             content = message.get('content', '')
 
@@ -2094,10 +2525,129 @@ class MainFrame(wx.Frame):
             # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
             # 将消息信息存储在 list_data 数组中
             self.list_ctrl.AppendItem([formatted_content])
-            self.list_data.append({
+
+            # 构建存储的数据
+            conversation_data = {
                 'type': 'conversation',
                 'message_data': message
-            })
+            }
+
+            self.list_data.append(conversation_data)
+
+        # 如果需要显示序号，使用重新构建列表的方式
+        if show_list_numbers:
+            total_items = len(self.list_data)  # 使用list_data的长度，因为已经包含了所有项
+            # 清空列表
+            self.list_ctrl.DeleteAllItems()
+            # 重新构建所有项目，这次包含序号
+            for i in range(total_items):
+                # 获取存储的数据
+                data = self.list_data[i]
+                if data['type'] == 'thread':
+                    # 帖子项目 - 构建包含序号的显示文本
+                    try:
+                        thread = self.current_threads[i] if i < len(self.current_threads) else {}
+                        subject = thread.get('subject', '')
+                        username = thread.get('username', '')
+                        views = thread.get('views', 0)
+                        forumname = thread.get('forumname', '')
+                        dateline_fmt = thread.get('dateline_fmt', '')
+                        posts = thread.get('posts', 0)
+                        lastpost_fmt = thread.get('lastpost_fmt', '')
+                        lastusername = thread.get('lastusername', '')
+
+                        display_text = f"{subject} 作者:{username};浏览:{views};板块:{forumname};发表时间:{dateline_fmt};回复:{posts};回复时间:{lastpost_fmt};最后回复:{lastusername} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"帖子数据加载失败 ，{i+1}之{total_items}项"
+
+                    # 清理多余信息
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                elif data['type'] == 'post':
+                    # 回复项目 - 构建包含序号的显示文本
+                    try:
+                        post_data = data.get('post_data', {})
+                        floor = data.get('floor', i + 1)
+                        username = post_data.get('username', '')
+                        content = self.clean_html_tags(post_data.get('message', ''))
+                        create_date = post_data.get('dateline_fmt', '')
+
+                        if floor == 1:
+                            formatted_content = f"楼主 {username} 说\n{content}\n发表时间：{create_date} ，{i+1}之{total_items}项"
+                        else:
+                            formatted_content = f"{floor}楼 {username} 说\n{content}\n发表时间：{create_date} ，{i+1}之{total_items}项"
+                        display_text = formatted_content
+                    except:
+                        display_text = f"回复数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'message':
+                    # 消息项目 - 构建包含序号的显示文本
+                    try:
+                        message_data = data.get('message_data', {})
+                        username = message_data.get('username', '')
+                        display_text = f"{username} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"消息数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'conversation':
+                    # 消息对话项目 - 构建包含序号的显示文本
+                    try:
+                        message_data = data.get('message_data', {})
+                        content = message_data.get('content', '')
+                        formatted_content = content
+
+                        if len(formatted_content) > 200:
+                            formatted_content = formatted_content[:200] + '...'
+                        display_text = f"{formatted_content} ，{i+1}之{total_items}项"
+                    except:
+                        display_text = f"对话数据加载失败 ，{i+1}之{total_items}项"
+
+                elif data['type'] == 'pagination':
+                    # 分页控制项目 - 构建包含序号的显示文本
+                    action = data.get('action', '')
+                    page = data.get('page', 1)
+
+                    if action == 'prev':
+                        display_text = f"上一页({page}) ，{i+1}之{total_items}项"
+                    elif action == 'next':
+                        display_text = f"下一页({page}) ，{i+1}之{total_items}项"
+                    elif action == 'jump':
+                        current_page = self.current_pagination.get('page', 1)
+                        total_page = self.current_pagination.get('totalpage', 1)
+                        display_text = f"当前第{current_page}页共{total_page}页，回车输入页码跳转 ，{i+1}之{total_items}项"
+                    elif action == 'reply':
+                        display_text = f"回复帖子 ，{i+1}之{total_items}项"
+                    else:
+                        display_text = f"分页控制 ，{i+1}之{total_items}项"
+
+                    # 清理分页文本
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                else:
+                    # 其他类型的项目
+                    display_text = f"项目 ，{i+1}之{total_items}项"
+
+                # 重新添加到列表
+                self.list_ctrl.AppendItem([display_text])
+
+                # 在数据中存储序号信息
+                data['list_number'] = f"{i+1}之{total_items}项"
 
     def create_message_input_panel(self):
         """创建消息输入面板"""
