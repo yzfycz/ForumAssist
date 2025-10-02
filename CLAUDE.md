@@ -278,3 +278,26 @@ password2 = [encrypted_password]
 - **Keyboard Navigation**: Implemented proper Enter key handling in custom page jump dialog
 - **Exception Safety**: Added comprehensive state cleanup in exception handlers to prevent dialog lock-up
 - **User Experience**: Improved input field behavior with automatic focus and text selection
+
+12. **Post Content Viewer Enhancement (2025-10-02)**
+    - Transformed post floor editor from editing mode to read-only viewing mode for better user experience
+    - Modified TextCtrl to use wx.TE_READONLY and wx.TE_DONTWRAP styles for non-editable content display
+    - Fixed wxPython sizer assertion errors by implementing proper parent-child sizer relationships
+    - Enhanced dialog title and labels from "编辑" (Edit) to "浏览" (View) to reflect new functionality
+    - Removed save button and simplified interface to include only close button for cleaner UX
+    - Implemented comprehensive dialog state management with _floor_dialog_open flag to prevent duplicate opening
+    - Added dedicated event handlers for close button and dialog close events to ensure proper state cleanup
+    - Enhanced keyboard navigation with Escape and Backspace keys for quick dialog dismissal
+    - Used wx.CallAfter for proper focus management and timing issues
+    - Added exception safety with try-finally blocks to ensure state cleanup in all scenarios
+    - Maintained all existing keyboard shortcuts and accessibility features
+
+### Key Technical Improvements (Post Viewer Enhancement)
+- **Read-Only Mode**: Converted editing functionality to viewing-only with proper style flags
+- **Text Display Optimization**: Disabled automatic text wrapping while maintaining multi-line display capability
+- **Dialog Architecture**: Implemented proper sizer hierarchy with separate main_sizer and panel sizer to resolve assertion errors
+- **State Management**: Added _floor_dialog_open flag tracking with comprehensive cleanup in all exit paths
+- **Event Handling**: Separated close button event handling from keyboard events for better control
+- **Focus Management**: Used wx.CallAfter to set focus to content area for immediate screen reader access
+- **Exception Safety**: Implemented robust error handling with state cleanup to prevent dialog lock-up
+- **User Interface**: Simplified interface design with appropriate button labeling and dialog titles

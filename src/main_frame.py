@@ -2039,8 +2039,12 @@ class MainFrame(wx.Frame):
             wx.MessageBox("消息发送失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def show_floor_editor(self, floor_index):
-        """显示楼层编辑器"""
+        """显示楼层内容浏览框"""
         try:
+            # 检查是否已有对话框打开
+            if hasattr(self, '_floor_dialog_open') and self._floor_dialog_open:
+                return
+
             if not hasattr(self, 'current_posts') or floor_index >= len(self.current_posts):
                 return
 
@@ -2049,8 +2053,15 @@ class MainFrame(wx.Frame):
             username = post.get('username', '')
             floor = floor_index + 1
 
-            # 创建编辑对话框
-            dialog = wx.Dialog(self, title=f"编辑{floor}楼 - {username}", size=(600, 400))
+            # 设置对话框状态为打开
+            self._floor_dialog_open = True
+
+            # 创建浏览对话框
+            dialog = wx.Dialog(self, title=f"浏览{floor}楼 - {username}", size=(600, 400))
+
+            # 创建主sizer用于dialog
+            main_sizer = wx.BoxSizer(wx.VERTICAL)
+
             panel = wx.Panel(dialog)
             sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -2058,47 +2069,60 @@ class MainFrame(wx.Frame):
             info_label = wx.StaticText(panel, label=f"{floor}楼 {username} 的内容:")
             sizer.Add(info_label, 0, wx.ALL | wx.EXPAND, 5)
 
-            # 内容编辑框
-            content_ctrl = wx.TextCtrl(panel, value=original_content, style=wx.TE_MULTILINE | wx.TE_PROCESS_ENTER)
+            # 内容显示框（只读，不自动换行）
+            content_ctrl = wx.TextCtrl(panel, value=original_content, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
             sizer.Add(content_ctrl, 1, wx.ALL | wx.EXPAND, 5)
 
             # 按钮面板
             button_panel = wx.Panel(panel)
             button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            save_button = wx.Button(button_panel, label="保存")
-            cancel_button = wx.Button(button_panel, label="取消")
-            button_sizer.Add(save_button, 0, wx.ALL, 5)
-            button_sizer.Add(cancel_button, 0, wx.ALL, 5)
+            close_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="关闭")
+            button_sizer.Add(close_button, 0, wx.ALL, 5)
             button_panel.SetSizer(button_sizer)
             sizer.Add(button_panel, 0, wx.ALL | wx.ALIGN_CENTER, 5)
 
             panel.SetSizer(sizer)
+            main_sizer.Add(panel, 1, wx.EXPAND)
+            dialog.SetSizerAndFit(main_sizer)
 
             # 绑定键盘事件
             def on_char(event):
                 keycode = event.GetKeyCode()
-                if keycode == wx.WXK_ESCAPE:
-                    dialog.EndModal(wx.ID_CANCEL)
-                elif keycode == wx.WXK_BACK:
+                if keycode == wx.WXK_ESCAPE or keycode == wx.WXK_BACK:
                     dialog.EndModal(wx.ID_CANCEL)
                 else:
                     event.Skip()
 
+            # 对话框关闭事件处理
+            def on_dialog_close(event):
+                self._floor_dialog_open = False
+                event.Skip()
+
+            # 按钮事件处理
+            def on_close_button(event):
+                dialog.EndModal(wx.ID_CANCEL)
+
             content_ctrl.Bind(wx.EVT_CHAR, on_char)
-            save_button.Bind(wx.EVT_BUTTON, lambda e: dialog.EndModal(wx.ID_OK))
-            cancel_button.Bind(wx.EVT_BUTTON, lambda e: dialog.EndModal(wx.ID_CANCEL))
+            close_button.Bind(wx.EVT_BUTTON, on_close_button)
+            dialog.Bind(wx.EVT_CLOSE, on_dialog_close)
 
-            # 显示对话框
-            if dialog.ShowModal() == wx.ID_OK:
-                new_content = content_ctrl.GetValue().strip()
-                if new_content != original_content:
-                    # 这里可以添加保存编辑的逻辑
-                    wx.MessageBox("编辑功能暂未实现", "提示", wx.OK | wx.ICON_INFORMATION)
+            # 使用wx.CallAfter设置焦点
+            wx.CallAfter(content_ctrl.SetFocus)
 
-            dialog.Destroy()
+            try:
+                # 显示对话框
+                dialog.ShowModal()
+            except Exception as dialog_error:
+                print(f"对话框显示错误: {dialog_error}")
+            finally:
+                # 确保状态被重置
+                self._floor_dialog_open = False
+                dialog.Destroy()
 
         except Exception as e:
-            print(f"显示楼层编辑器错误: {e}")
+            print(f"显示楼层浏览框错误: {e}")
+            # 确保在错误情况下也重置状态
+            self._floor_dialog_open = False
 
     def on_close_message(self, event):
         """关闭消息界面"""
