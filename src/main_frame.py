@@ -328,8 +328,8 @@ class MainFrame(wx.Frame):
                     }
                     self.tree_ctrl.SetItemData(type1_item, type1_data)
 
-                    # 添加typeid2子分类
-                    typeid2_list = type1.get('typeid2', [])
+                    # 添加全局typeid2子分类（已解决/未解决）
+                    typeid2_list = forum_types.get('typeid2', [])
                     if typeid2_list:
                         for type2 in typeid2_list:
                             type2_name = type2.get('name', '')
@@ -453,7 +453,7 @@ class MainFrame(wx.Frame):
                 fid = item_data if item_data else None
                 self.load_content(text, fid)
         except Exception as e:
-            print(f"树视图激活事件错误: {e}")
+            pass
 
     def on_tree_key_down(self, event):
         """树视图键盘事件处理"""
@@ -541,7 +541,7 @@ class MainFrame(wx.Frame):
                 self.load_latest_threads_and_restore_focus()
 
         except Exception as e:
-            print(f"返回列表错误: {e}")
+            pass
             self.load_latest_threads_and_restore_focus()
 
     def load_forum_section_and_restore_focus(self, forum_name, fid):
@@ -558,7 +558,7 @@ class MainFrame(wx.Frame):
             # 显示内容
             self.display_threads_and_restore_focus(threads, pagination, 'thread_list')
         except Exception as e:
-            print(f"加载板块内容错误: {e}")
+            pass
 
     def load_latest_threads_and_restore_focus(self):
         """加载最新发表并恢复焦点"""
@@ -662,7 +662,7 @@ class MainFrame(wx.Frame):
                 self.list_ctrl.SetFocus()
 
         except Exception as e:
-            print(f"重置键盘游标错误: {e}")
+            pass
 
     def get_current_page_params(self):
         """获取当前页面的参数"""
@@ -753,7 +753,7 @@ class MainFrame(wx.Frame):
                 return True
 
         except Exception as e:
-            print(f"恢复到正确页面错误: {e}")
+            pass
 
         return False
 
@@ -800,7 +800,6 @@ class MainFrame(wx.Frame):
                 return user_info.get('nickname', user_info.get('username', '用户'))
             return '用户'
         except Exception as e:
-            print(f"获取用户昵称错误: {e}")
             return '用户'
 
     def handle_tree_selection(self, selected_item):
@@ -839,7 +838,7 @@ class MainFrame(wx.Frame):
                 self.list_ctrl.SetFocus()
 
         except Exception as e:
-            print(f"处理树视图选择错误: {e}")
+            pass
 
     def move_to_first_item(self):
         """移动到第一个项目"""
@@ -851,7 +850,7 @@ class MainFrame(wx.Frame):
                     self.tree_ctrl.SelectItem(first_child)
                     self.tree_ctrl.EnsureVisible(first_child)
         except Exception as e:
-            print(f"移动到第一项错误: {e}")
+            pass
 
     def move_to_last_item(self):
         """移动到最后一个项目"""
@@ -869,7 +868,7 @@ class MainFrame(wx.Frame):
                     self.tree_ctrl.SelectItem(last_item)
                     self.tree_ctrl.EnsureVisible(last_item)
         except Exception as e:
-            print(f"移动到最后一项错误: {e}")
+            pass
 
     def move_page_up(self):
         """向上翻页（移动5项）"""
@@ -895,7 +894,7 @@ class MainFrame(wx.Frame):
                 self.tree_ctrl.SelectItem(target_item)
                 self.tree_ctrl.EnsureVisible(target_item)
         except Exception as e:
-            print(f"向上翻页错误: {e}")
+            pass
 
     def move_page_down(self):
         """向下翻页（移动5项）"""
@@ -921,7 +920,7 @@ class MainFrame(wx.Frame):
                 self.tree_ctrl.SelectItem(target_item)
                 self.tree_ctrl.EnsureVisible(target_item)
         except Exception as e:
-            print(f"向下翻页错误: {e}")
+            pass
 
     def on_list_focus(self, event):
         """列表获得焦点事件 - 确保有选中项以便屏幕阅读器朗读"""
@@ -931,7 +930,7 @@ class MainFrame(wx.Frame):
                 self.list_ctrl.SelectRow(0)
                 self.list_ctrl.SetFocus()
         except Exception as e:
-            print(f"列表焦点事件处理错误: {e}")
+            pass
         event.Skip()
 
     def on_list_selection(self, event):
@@ -940,7 +939,7 @@ class MainFrame(wx.Frame):
             # DataViewListCtrl 的选择事件处理
             pass
         except Exception as e:
-            print(f"列表选择事件处理错误: {e}")
+            pass
         event.Skip()
 
     def on_list_activated(self, event):
@@ -950,7 +949,7 @@ class MainFrame(wx.Frame):
             if selected_row != -1:
                 self.handle_row_activation(selected_row)
         except Exception as e:
-            print(f"列表激活事件处理错误: {e}")
+            pass
         event.Skip()
 
     def handle_row_activation(self, selected_row):
@@ -992,7 +991,7 @@ class MainFrame(wx.Frame):
                         self.show_floor_editor(selected_row)
 
         except Exception as e:
-            print(f"处理行激活错误: {e}")
+            pass
 
     def on_search(self, event):
         """搜索事件"""
@@ -1088,7 +1087,7 @@ class MainFrame(wx.Frame):
                 delattr(self, 'current_content_type')
 
         except Exception as e:
-            print(f"隐藏消息界面错误: {e}")
+            pass
 
     def load_latest_threads(self):
         """加载最新发表"""
@@ -1180,7 +1179,6 @@ class MainFrame(wx.Frame):
             self.display_messages(messages)
 
         except Exception as e:
-            print(f"加载消息错误: {e}")
             wx.MessageBox("加载消息失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def load_forum_section(self, section_name, fid=None):
@@ -1199,11 +1197,6 @@ class MainFrame(wx.Frame):
 
         self.current_fid = api_params.get('fid')
         result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params)
-        try:
-            print(f"DEBUG: 加载分类板块 {section_name}, 参数: {api_params}, 返回结果: {result}")
-        except Exception as e:
-            print(f"DEBUG: 加载分类板块返回编码错误: {e}")
-            print(f"DEBUG: 加载分类板块 {section_name}, 参数: {api_params}")
 
         # 如果第一页为空但总页数大于1，自动查找有内容的第一页
         threadlist = result.get('threadlist', [])
@@ -1211,22 +1204,11 @@ class MainFrame(wx.Frame):
         total_page = pagination.get('totalpage', 1)
 
         if not threadlist and total_page > 1:
-            print(f"DEBUG: 第一页为空，自动查找有内容的第一页...")
-
             # 使用二分查找快速找到有内容的第一页
             first_content_page = self._find_first_content_page(api_params, total_page)
 
             if first_content_page > 1:
-                try:
-                    print(f"DEBUG: 找到有内容的第一页: 第{first_content_page}页")
-                except Exception as e:
-                    print(f"DEBUG: 找到有内容的第一页编码错误: {e}")
-
                 result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params, first_content_page)
-                try:
-                    print(f"DEBUG: 第{first_content_page}页结果: {result}")
-                except Exception as e:
-                    print(f"DEBUG: 第{first_content_page}页结果编码错误: {e}")
 
                 # 保存偏移信息，用于显示逻辑
                 pagination['page_offset'] = first_content_page - 1
@@ -1237,7 +1219,6 @@ class MainFrame(wx.Frame):
                 # 使用修改后的分页信息
                 self.display_threads(result.get('threadlist', []), pagination, 'thread_list', api_params)
             else:
-                print(f"DEBUG: 未找到有内容的页面")
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list', api_params)
         else:
             # 第一页有内容，正常显示
@@ -1246,30 +1227,16 @@ class MainFrame(wx.Frame):
     def _find_first_content_page(self, api_params, total_page):
         """使用二分查找快速定位有内容的第一页"""
         try:
-            try:
-                print(f"DEBUG: 开始二分查找，总页数: {total_page}")
-            except Exception as e:
-                print(f"DEBUG: 开始二分查找编码错误: {e}")
-
             left = 1
             right = total_page
             first_content_page = total_page + 1  # 默认为没有找到
 
             while left <= right:
                 mid = (left + right) // 2
-                try:
-                    print(f"DEBUG: 检查第{mid}页...")
-                except Exception as e:
-                    print(f"DEBUG: 检查页码信息编码错误: {e}")
 
                 try:
                     # 检查中间页是否有内容
                     result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params, mid)
-
-                    try:
-                        print(f"DEBUG: 第{mid}页API返回: {result}")
-                    except Exception as e:
-                        print(f"DEBUG: 第{mid}页API返回编码错误: {e}")
 
                     if result and isinstance(result, dict):
                         # 检查不同的可能结果结构
@@ -1280,59 +1247,27 @@ class MainFrame(wx.Frame):
                             # 旧版本API结构
                             threadlist = result.get('threadlist', [])
                         else:
-                            try:
-                                print(f"DEBUG: 第{mid}页未知API结构，向右查找")
-                            except Exception as e:
-                                print(f"DEBUG: 第{mid}页未知API结构编码错误: {e}")
                             left = mid + 1
                             continue
 
                         if threadlist:  # 找到有内容的页面
                             first_content_page = mid
                             right = mid - 1  # 继续向左查找更早的有内容页面
-                            try:
-                                print(f"DEBUG: 第{mid}页有内容({len(threadlist)}个帖子)，继续向左查找")
-                            except Exception as e:
-                                print(f"DEBUG: 第{mid}页有内容信息编码错误: {e}")
                         else:  # 没有内容，向右查找
                             left = mid + 1
-                            try:
-                                print(f"DEBUG: 第{mid}页无内容，向右查找")
-                            except Exception as e:
-                                print(f"DEBUG: 第{mid}页无内容信息编码错误: {e}")
                     else:
-                        try:
-                            print(f"DEBUG: 第{mid}页API调用失败或返回格式错误，向右查找")
-                        except Exception as e:
-                            print(f"DEBUG: 第{mid}页API调用失败信息编码错误: {e}")
                         left = mid + 1
 
                 except Exception as page_check_e:
                     # 处理单个页面检查时的异常（包括编码异常）
-                    try:
-                        print(f"DEBUG: 第{mid}页检查时出错: {page_check_e}")
-                    except Exception as encoding_e:
-                        print(f"DEBUG: 第{mid}页检查出错编码错误: {encoding_e}")
                     left = mid + 1  # 出错时向右查找
 
             if first_content_page <= total_page:
-                try:
-                    print(f"DEBUG: 找到有内容的第一页: 第{first_content_page}页")
-                except Exception as e:
-                    print(f"DEBUG: 找到有内容的第一页编码错误: {e}")
                 return first_content_page
             else:
-                try:
-                    print(f"DEBUG: 所有页面都没有内容，返回第1页")
-                except Exception as e:
-                    print(f"DEBUG: 所有页面都没有内容信息编码错误: {e}")
                 return 1
 
         except Exception as e:
-            try:
-                print(f"DEBUG: 查找第一页内容时出错: {e}")
-            except Exception as encoding_e:
-                print(f"DEBUG: 查找第一页内容时出错编码错误: {encoding_e}")
             return 1  # 出错时返回第1页
 
     def search_content(self, keyword):
@@ -1509,7 +1444,6 @@ class MainFrame(wx.Frame):
             self.display_posts(posts, pagination, thread_info)
 
         except Exception as e:
-            print(f"加载帖子详情错误: {e}")
             wx.MessageBox("加载帖子详情失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def load_next_page(self):
@@ -1598,7 +1532,6 @@ class MainFrame(wx.Frame):
                 wx.CallAfter(self.reset_keyboard_cursor, 0)
 
         except Exception as e:
-            print(f"加载下一页错误: {e}")
             wx.MessageBox("加载下一页失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def clean_html_tags(self, html_content):
@@ -1808,7 +1741,6 @@ class MainFrame(wx.Frame):
                 wx.CallAfter(self.reset_keyboard_cursor, 0)
 
         except Exception as e:
-            print(f"加载上一页错误: {e}")
             wx.MessageBox("加载上一页失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def show_page_jump_dialog(self):
@@ -1902,7 +1834,6 @@ class MainFrame(wx.Frame):
         except Exception as e:
             # 确保在异常情况下也重置状态
             self._page_dialog_open = False
-            print(f"页码跳转错误: {e}")
 
     def jump_to_page(self, target_page):
         """跳转到指定页码"""
@@ -1965,9 +1896,32 @@ class MainFrame(wx.Frame):
                 result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, target_page)
                 self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
 
+            # 页面跳转成功后，将焦点移动到列表第一项
+            if self.list_ctrl.GetItemCount() > 0:
+                # 延迟执行以确保列表已经完全更新
+                wx.CallAfter(self.move_focus_to_first_item)
+
         except Exception as e:
-            print(f"页面跳转错误: {e}")
             wx.MessageBox("页面跳转失败", "错误", wx.OK | wx.ICON_ERROR)
+
+    def move_focus_to_first_item(self):
+        """将焦点移动到列表第一项"""
+        try:
+            if self.list_ctrl.GetItemCount() > 0:
+                # 取消所有选择
+                self.list_ctrl.UnselectAll()
+
+                # 选择第一项（索引0）
+                self.list_ctrl.SelectRow(0)
+
+                # 设置焦点到列表控件
+                self.list_ctrl.SetFocus()
+
+                # 重置键盘游标位置到第一项
+                self.reset_keyboard_cursor(0)
+
+        except Exception as e:
+            pass
 
     def show_reply_dialog(self):
         """显示回复对话框"""
@@ -2051,7 +2005,6 @@ class MainFrame(wx.Frame):
         except Exception as e:
             # 确保在异常情况下也重置状态
             self._reply_dialog_open = False
-            print(f"显示回复对话框错误: {e}")
 
     def post_reply(self, content):
         """发送回复"""
@@ -2068,7 +2021,6 @@ class MainFrame(wx.Frame):
                 wx.MessageBox("回复发送失败", "错误", wx.OK | wx.ICON_ERROR)
 
         except Exception as e:
-            print(f"发送回复错误: {e}")
             wx.MessageBox("回复发送失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def display_messages(self, messages):
@@ -2113,7 +2065,6 @@ class MainFrame(wx.Frame):
             self.create_message_input_panel()
 
         except Exception as e:
-            print(f"加载消息详情错误: {e}")
             wx.MessageBox("加载消息详情失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def display_message_conversation(self, messages):
@@ -2220,7 +2171,6 @@ class MainFrame(wx.Frame):
                 wx.MessageBox("消息发送失败", "错误", wx.OK | wx.ICON_ERROR)
 
         except Exception as e:
-            print(f"发送消息错误: {e}")
             wx.MessageBox("消息发送失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def show_floor_editor(self, floor_index):
@@ -2298,14 +2248,13 @@ class MainFrame(wx.Frame):
                 # 显示对话框
                 dialog.ShowModal()
             except Exception as dialog_error:
-                print(f"对话框显示错误: {dialog_error}")
+                pass
             finally:
                 # 确保状态被重置
                 self._floor_dialog_open = False
                 dialog.Destroy()
 
         except Exception as e:
-            print(f"显示楼层浏览框错误: {e}")
             # 确保在错误情况下也重置状态
             self._floor_dialog_open = False
 
@@ -2321,7 +2270,7 @@ class MainFrame(wx.Frame):
             self.load_messages()
 
         except Exception as e:
-            print(f"关闭消息界面错误: {e}")
+            pass
 
     def show_account_manager(self):
         """显示账户管理界面"""

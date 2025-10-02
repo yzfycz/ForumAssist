@@ -123,7 +123,6 @@ class ConfigManager:
             return True
 
         except Exception as e:
-            print(f"添加论坛账户失败: {e}")
             return False
 
     def get_forum_accounts(self, forum_name):
@@ -210,7 +209,6 @@ class ConfigManager:
             return True
 
         except Exception as e:
-            print(f"删除论坛账户失败: {e}")
             return False
 
     def update_forum_account(self, forum_name, old_username, new_account_data):
@@ -261,7 +259,6 @@ class ConfigManager:
             return True
 
         except Exception as e:
-            print(f"更新论坛账户失败: {e}")
             return False
 
     def delete_forum(self, forum_name):
@@ -289,7 +286,6 @@ class ConfigManager:
             return True
 
         except Exception as e:
-            print(f"删除论坛账户失败: {e}")
             return False
 
     def get_forum(self, forum_name):

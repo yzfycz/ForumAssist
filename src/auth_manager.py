@@ -82,14 +82,11 @@ class AuthenticationManager:
 
                     return True
                 else:
-                    print(f"登录失败: {result.get('message', '未知错误')}")
                     return False
             else:
-                print(f"登录请求失败: HTTP {response.status_code}")
                 return False
 
         except Exception as e:
-            print(f"登录过程中发生错误: {e}")
             return False
 
     def logout_from_forum(self, forum_name):
@@ -169,7 +166,7 @@ class AuthenticationManager:
                     # 用户信息在 message 中，不是 data 中
                     return result.get('message', {})
         except Exception as e:
-            print(f"获取用户信息失败: {e}")
+            pass
 
         return {}
 

@@ -56,7 +56,7 @@ class ForumClient:
                     return forum_list
 
         except Exception as e:
-            print(f"获取论坛列表失败: {e}")
+            pass
 
         return []
 
@@ -109,7 +109,7 @@ class ForumClient:
                     }
 
         except Exception as e:
-            print(f"获取首页内容失败: {e}")
+            pass
 
         return {"threadlist": [], "pagination": {}}
 
@@ -159,7 +159,7 @@ class ForumClient:
                     }
 
         except Exception as e:
-            print(f"获取帖子列表失败: {e}")
+            pass
 
         return {"threadlist": [], "pagination": {}}
 
@@ -211,7 +211,7 @@ class ForumClient:
                     }
 
         except Exception as e:
-            print(f"获取分类帖子列表失败: {e}")
+            pass
 
         return {"threadlist": [], "pagination": {}}
 
@@ -273,7 +273,7 @@ class ForumClient:
                     pass  # API返回状态不为1
 
         except Exception as e:
-            print(f"获取帖子详情失败: {e}")
+            pass
 
         return {"postlist": [], "pagination": {}}
 
@@ -325,7 +325,7 @@ class ForumClient:
                     }
 
         except Exception as e:
-            print(f"获取用户帖子失败: {e}")
+            pass
 
         return {"threadlist": [], "pagination": {}}
 
@@ -377,7 +377,7 @@ class ForumClient:
                     }
 
         except Exception as e:
-            print(f"获取用户回复失败: {e}")
+            pass
 
         return {"threadlist": [], "pagination": {}}
 
@@ -424,7 +424,7 @@ class ForumClient:
                     }
 
         except Exception as e:
-            print(f"搜索失败: {e}")
+            pass
 
         return {"threadlist": [], "pagination": {}}
 
@@ -466,7 +466,7 @@ class ForumClient:
                 return result.get('status') == 1
 
         except Exception as e:
-            print(f"发表回复失败: {e}")
+            pass
 
         return False
 
@@ -502,7 +502,7 @@ class ForumClient:
                 return self.html_parser.parse_message_list(response.text)
 
         except Exception as e:
-            print(f"获取消息列表失败: {e}")
+            pass
 
         return []
 
@@ -539,7 +539,7 @@ class ForumClient:
                 return self.html_parser.parse_message_detail(response.text)
 
         except Exception as e:
-            print(f"获取消息详情失败: {e}")
+            pass
 
         return []
 
@@ -581,6 +581,6 @@ class ForumClient:
             return response.status_code == 200
 
         except Exception as e:
-            print(f"发送消息失败: {e}")
+            pass
 
         return False
