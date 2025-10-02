@@ -1199,7 +1199,93 @@ class MainFrame(wx.Frame):
 
         self.current_fid = api_params.get('fid')
         result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params)
-        self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
+        print(f"DEBUG: 加载分类板块 {section_name}, 参数: {api_params}, 返回结果: {result}")
+
+        # 如果第一页为空但总页数大于1，自动查找有内容的第一页
+        threadlist = result.get('threadlist', [])
+        pagination = result.get('pagination', {})
+        total_page = pagination.get('totalpage', 1)
+
+        if not threadlist and total_page > 1:
+            print(f"DEBUG: 第一页为空，自动查找有内容的第一页...")
+
+            # 使用二分查找快速找到有内容的第一页
+            first_content_page = self._find_first_content_page(api_params, total_page)
+
+            if first_content_page > 1:
+                print(f"DEBUG: 找到有内容的第一页: 第{first_content_page}页")
+                result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params, first_content_page)
+                print(f"DEBUG: 第{first_content_page}页结果: {result}")
+
+                # 保存偏移信息，用于显示逻辑
+                pagination['page_offset'] = first_content_page - 1
+                pagination['real_total_page'] = total_page
+                pagination['totalpage'] = total_page - first_content_page + 1  # 调整显示的总页数
+                pagination['page'] = 1  # 强制显示为第1页
+
+                # 使用修改后的分页信息
+                self.display_threads(result.get('threadlist', []), pagination, 'thread_list', api_params)
+            else:
+                print(f"DEBUG: 未找到有内容的页面")
+                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list', api_params)
+        else:
+            # 第一页有内容，正常显示
+            self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list', api_params)
+
+    def _find_first_content_page(self, api_params, total_page):
+        """使用二分查找快速定位有内容的第一页"""
+        try:
+            print(f"DEBUG: 开始二分查找，总页数: {total_page}")
+
+            left = 1
+            right = total_page
+            first_content_page = total_page + 1  # 默认为没有找到
+
+            while left <= right:
+                mid = (left + right) // 2
+                print(f"DEBUG: 检查第{mid}页...")
+
+                # 检查中间页是否有内容
+                result = self.forum_client.get_thread_list_with_type(self.current_forum, api_params, mid)
+                try:
+                    print(f"DEBUG: 第{mid}页API返回: {result}")
+                except Exception as e:
+                    print(f"DEBUG: 第{mid}页API返回编码错误: {e}")
+
+                if result and isinstance(result, dict):
+                    # 检查不同的可能结果结构
+                    if result.get('result') == 1:
+                        # 新版本API结构
+                        threadlist = result.get('message', {}).get('threadlist', [])
+                    elif 'threadlist' in result:
+                        # 旧版本API结构
+                        threadlist = result.get('threadlist', [])
+                    else:
+                        print(f"DEBUG: 第{mid}页未知API结构，向右查找")
+                        left = mid + 1
+                        continue
+
+                    if threadlist:  # 找到有内容的页面
+                        first_content_page = mid
+                        right = mid - 1  # 继续向左查找更早的有内容页面
+                        print(f"DEBUG: 第{mid}页有内容({len(threadlist)}个帖子)，继续向左查找")
+                    else:  # 没有内容，向右查找
+                        left = mid + 1
+                        print(f"DEBUG: 第{mid}页无内容，向右查找")
+                else:
+                    print(f"DEBUG: 第{mid}页API调用失败或返回格式错误，向右查找")
+                    left = mid + 1
+
+            if first_content_page <= total_page:
+                print(f"DEBUG: 找到有内容的第一页: 第{first_content_page}页")
+                return first_content_page
+            else:
+                print(f"DEBUG: 所有页面都没有内容，返回第1页")
+                return 1
+
+        except Exception as e:
+            print(f"DEBUG: 查找第一页内容时出错: {e}")
+            return 1  # 出错时返回第1页
 
     def search_content(self, keyword):
         """搜索内容"""
@@ -1207,7 +1293,7 @@ class MainFrame(wx.Frame):
         result = self.forum_client.search(self.current_forum, keyword)
         self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
 
-    def display_threads(self, threads, pagination=None, content_type='thread_list'):
+    def display_threads(self, threads, pagination=None, content_type='thread_list', api_params=None):
         """显示帖子列表 - DataViewListCtrl版本"""
         self.list_ctrl.DeleteAllItems()
         # 清空数据存储
@@ -1217,6 +1303,9 @@ class MainFrame(wx.Frame):
         self.current_content_type = content_type
         self.current_pagination = pagination or {}
         self.current_threads = threads
+
+        # 保存API参数用于分页操作
+        self.current_api_params = api_params or {}
 
         for thread in threads:
             # 构建新的显示格式
@@ -1389,10 +1478,26 @@ class MainFrame(wx.Frame):
 
             next_page = current_page + 1
 
+            # 计算真实的页面号（考虑偏移）
+            page_offset = self.current_pagination.get('page_offset', 0)
+            real_next_page = next_page + page_offset
+
             # 根据当前内容类型加载下一页
             if self.current_content_type == 'thread_list' and hasattr(self, 'current_fid'):
-                result = self.forum_client.get_thread_list(self.current_forum, self.current_fid, next_page)
-                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
+                if hasattr(self, 'current_api_params') and self.current_api_params:
+                    # 使用API参数加载分类内容
+                    result = self.forum_client.get_thread_list_with_type(self.current_forum, self.current_api_params, real_next_page)
+                    # 保持页面偏移信息
+                    new_pagination = result.get('pagination', {})
+                    new_pagination['page_offset'] = page_offset
+                    new_pagination['real_total_page'] = self.current_pagination.get('real_total_page', new_pagination.get('totalpage', 1))
+                    new_pagination['totalpage'] = new_pagination.get('totalpage', 1) - page_offset
+                    new_pagination['page'] = next_page
+                    self.display_threads(result.get('threadlist', []), new_pagination, 'thread_list', self.current_api_params)
+                else:
+                    # 普通板块内容
+                    result = self.forum_client.get_thread_list(self.current_forum, self.current_fid, real_next_page)
+                    self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
                 # 设置键盘游标到第一项
                 wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'search_result' and hasattr(self, 'current_keyword'):
@@ -1584,10 +1689,26 @@ class MainFrame(wx.Frame):
 
             prev_page = current_page - 1
 
+            # 计算真实的页面号（考虑偏移）
+            page_offset = self.current_pagination.get('page_offset', 0)
+            real_prev_page = prev_page + page_offset
+
             # 根据当前内容类型加载上一页
             if self.current_content_type == 'thread_list' and hasattr(self, 'current_fid'):
-                result = self.forum_client.get_thread_list(self.current_forum, self.current_fid, prev_page)
-                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
+                if hasattr(self, 'current_api_params') and self.current_api_params:
+                    # 使用API参数加载分类内容
+                    result = self.forum_client.get_thread_list_with_type(self.current_forum, self.current_api_params, real_prev_page)
+                    # 保持页面偏移信息
+                    new_pagination = result.get('pagination', {})
+                    new_pagination['page_offset'] = page_offset
+                    new_pagination['real_total_page'] = self.current_pagination.get('real_total_page', new_pagination.get('totalpage', 1))
+                    new_pagination['totalpage'] = new_pagination.get('totalpage', 1) - page_offset
+                    new_pagination['page'] = prev_page
+                    self.display_threads(result.get('threadlist', []), new_pagination, 'thread_list', self.current_api_params)
+                else:
+                    # 普通板块内容
+                    result = self.forum_client.get_thread_list(self.current_forum, self.current_fid, real_prev_page)
+                    self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
                 # 设置键盘游标到第一项
                 wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'search_result' and hasattr(self, 'current_keyword'):
@@ -1738,10 +1859,26 @@ class MainFrame(wx.Frame):
     def jump_to_page(self, target_page):
         """跳转到指定页码"""
         try:
+            # 计算真实的页面号（考虑偏移）
+            page_offset = getattr(self, 'current_pagination', {}).get('page_offset', 0)
+            real_target_page = target_page + page_offset
+
             # 根据当前内容类型跳转页面
             if self.current_content_type == 'thread_list' and hasattr(self, 'current_fid'):
-                result = self.forum_client.get_thread_list(self.current_forum, self.current_fid, target_page)
-                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
+                if hasattr(self, 'current_api_params') and self.current_api_params:
+                    # 使用API参数加载分类内容
+                    result = self.forum_client.get_thread_list_with_type(self.current_forum, self.current_api_params, real_target_page)
+                    # 保持页面偏移信息
+                    new_pagination = result.get('pagination', {})
+                    new_pagination['page_offset'] = page_offset
+                    new_pagination['real_total_page'] = self.current_pagination.get('real_total_page', new_pagination.get('totalpage', 1))
+                    new_pagination['totalpage'] = new_pagination.get('totalpage', 1) - page_offset
+                    new_pagination['page'] = target_page
+                    self.display_threads(result.get('threadlist', []), new_pagination, 'thread_list', self.current_api_params)
+                else:
+                    # 普通板块内容
+                    result = self.forum_client.get_thread_list(self.current_forum, self.current_fid, real_target_page)
+                    self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
             elif self.current_content_type == 'search_result' and hasattr(self, 'current_keyword'):
                 result = self.forum_client.search(self.current_forum, self.current_keyword, target_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
