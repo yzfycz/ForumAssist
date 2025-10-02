@@ -140,16 +140,20 @@ class MainFrame(wx.Frame):
     def create_list_view(self):
         """创建列表视图"""
         self.list_panel = wx.Panel(self.splitter)
+        self.list_panel.SetName("列表面板")  # 设置面板名称
         list_sizer = wx.BoxSizer(wx.VERTICAL)
 
         # 创建数据视图列表控件 - 支持更好的文本处理和自动换行
         self.list_ctrl = wx.dataview.DataViewListCtrl(self.list_panel, style=wx.dataview.DV_SINGLE)
+        # 设置控件标签
+        self.list_ctrl.SetName("项目")
         self.list_ctrl.AppendTextColumn("内容", mode=wx.dataview.DATAVIEW_CELL_INERT, width=2000)
         # 创建数据存储字典，用于存储每行对应的帖子ID
         self.list_data = []  # 存储每行的数据信息
         self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, self.on_list_selection)
         self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.on_list_activated)
         self.list_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_list_key_down)
+        self.list_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_list_focus)
 
         list_sizer.Add(self.list_ctrl, 1, wx.ALL | wx.EXPAND, 5)
         self.list_panel.SetSizer(list_sizer)
@@ -772,8 +776,11 @@ class MainFrame(wx.Frame):
             # 回退到通过tid查找
             found_index = -1
             for i in range(self.list_ctrl.GetItemCount()):
-                # 从隐藏列获取帖子ID
-                item_tid = int(self.list_ctrl.GetValue(i, 1)) if self.list_ctrl.GetColumnCount() > 1 else 0
+                # 从 list_data 数组获取帖子ID
+                if i < len(self.list_data):
+                    item_tid = self.list_data[i].get('tid', 0)
+                else:
+                    item_tid = 0
                 if item_tid > 0 and item_tid == self.previous_selected_tid:
                     found_index = i
                     break
@@ -916,6 +923,17 @@ class MainFrame(wx.Frame):
         except Exception as e:
             print(f"向下翻页错误: {e}")
 
+    def on_list_focus(self, event):
+        """列表获得焦点事件 - 确保有选中项以便屏幕阅读器朗读"""
+        try:
+            # 如果列表有内容但没有选中项，自动选择第一项
+            if self.list_ctrl.GetItemCount() > 0 and self.list_ctrl.GetSelectedRow() == -1:
+                self.list_ctrl.SelectRow(0)
+                self.list_ctrl.SetFocus()
+        except Exception as e:
+            print(f"列表焦点事件处理错误: {e}")
+        event.Skip()
+
     def on_list_selection(self, event):
         """列表选择事件 - DataViewListCtrl版本"""
         try:
@@ -923,6 +941,7 @@ class MainFrame(wx.Frame):
             pass
         except Exception as e:
             print(f"列表选择事件处理错误: {e}")
+        event.Skip()
 
     def on_list_activated(self, event):
         """列表激活事件 - 处理分页控制和帖子详情加载"""
@@ -932,6 +951,7 @@ class MainFrame(wx.Frame):
                 self.handle_row_activation(selected_row)
         except Exception as e:
             print(f"列表激活事件处理错误: {e}")
+        event.Skip()
 
     def handle_row_activation(self, selected_row):
         """处理行激活的通用逻辑"""
@@ -1373,12 +1393,18 @@ class MainFrame(wx.Frame):
             if self.current_content_type == 'thread_list' and hasattr(self, 'current_fid'):
                 result = self.forum_client.get_thread_list(self.current_forum, self.current_fid, next_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'search_result' and hasattr(self, 'current_keyword'):
                 result = self.forum_client.search(self.current_forum, self.current_keyword, next_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'user_threads' and hasattr(self, 'current_uid'):
                 result = self.forum_client.get_user_threads(self.current_forum, self.current_uid, next_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'user_threads')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'user_posts' and hasattr(self, 'current_uid'):
                 result = self.forum_client.get_user_posts(self.current_forum, self.current_uid, next_page)
                 # 处理 threadlist 格式，转换为新的显示格式
@@ -1403,14 +1429,20 @@ class MainFrame(wx.Frame):
                         formatted_threads.append(formatted_thread)
 
                 self.display_threads(formatted_threads, result.get('pagination', {}), 'user_posts')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'home_content' and hasattr(self, 'current_orderby'):
                 # 添加首页内容的分页支持
                 result = self.forum_client.get_home_content(self.current_forum, self.current_orderby, next_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
                 # 添加帖子详情的分页支持
                 result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, next_page)
                 self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
+                # 设置键盘游标到第一项（楼主）
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
 
         except Exception as e:
             print(f"加载下一页错误: {e}")
@@ -1505,7 +1537,7 @@ class MainFrame(wx.Frame):
 
             username = post.get('username', '')
             content = self.clean_html_tags(post.get('message', ''))
-            create_date = post.get('create_date_fmt', '')
+            create_date = post.get('dateline_fmt', '')
 
             # 格式化显示
             if floor == 1:
@@ -1556,12 +1588,18 @@ class MainFrame(wx.Frame):
             if self.current_content_type == 'thread_list' and hasattr(self, 'current_fid'):
                 result = self.forum_client.get_thread_list(self.current_forum, self.current_fid, prev_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'thread_list')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'search_result' and hasattr(self, 'current_keyword'):
                 result = self.forum_client.search(self.current_forum, self.current_keyword, prev_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'user_threads' and hasattr(self, 'current_uid'):
                 result = self.forum_client.get_user_threads(self.current_forum, self.current_uid, prev_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'user_threads')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'user_posts' and hasattr(self, 'current_uid'):
                 result = self.forum_client.get_user_posts(self.current_forum, self.current_uid, prev_page)
                 # 处理 threadlist 格式，转换为新的显示格式
@@ -1586,13 +1624,19 @@ class MainFrame(wx.Frame):
                         formatted_threads.append(formatted_thread)
 
                 self.display_threads(formatted_threads, result.get('pagination', {}), 'user_posts')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'home_content' and hasattr(self, 'current_orderby'):
                 # 添加首页内容的分页支持
                 result = self.forum_client.get_home_content(self.current_forum, self.current_orderby, prev_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
+                # 设置键盘游标到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
                 result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, prev_page)
                 self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
+                # 设置键盘游标到第一项（楼主）
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
 
         except Exception as e:
             print(f"加载上一页错误: {e}")
@@ -1601,22 +1645,80 @@ class MainFrame(wx.Frame):
     def show_page_jump_dialog(self):
         """显示页码跳转对话框"""
         try:
+            # 防止重复打开对话框
+            if hasattr(self, '_page_dialog_open') and self._page_dialog_open:
+                return
+
             if not hasattr(self, 'current_pagination'):
                 return
+
+            # 标记对话框为打开状态
+            self._page_dialog_open = True
 
             total_page = self.current_pagination.get('totalpage', 1)
             current_page = self.current_pagination.get('page', 1)
 
-            # 创建输入对话框
-            dialog = wx.TextEntryDialog(
-                self,
-                f"请输入目标页码 (1-{total_page}):",
-                "页码跳转",
-                str(current_page)
-            )
+            # 创建自定义对话框来更好地控制回车键行为
+            dialog = wx.Dialog(self, title="页码跳转", size=(300, 150))
+            dialog.SetExtraStyle(wx.WS_EX_CONTEXTHELP)
 
-            if dialog.ShowModal() == wx.ID_OK:
-                page_str = dialog.GetValue().strip()
+            panel = wx.Panel(dialog)
+            sizer = wx.BoxSizer(wx.VERTICAL)
+
+            # 提示标签
+            prompt_label = wx.StaticText(panel, label=f"请输入目标页码 (1-{total_page}):")
+            sizer.Add(prompt_label, 0, wx.ALL | wx.EXPAND, 10)
+
+            # 输入框
+            page_input = wx.TextCtrl(panel, value=str(current_page), style=wx.TE_PROCESS_ENTER)
+            sizer.Add(page_input, 0, wx.ALL | wx.EXPAND, 10)
+
+            # 按钮面板
+            button_panel = wx.Panel(panel)
+            button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            ok_button = wx.Button(button_panel, id=wx.ID_OK, label="确定")
+            cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消")
+            button_sizer.Add(ok_button, 0, wx.ALL, 5)
+            button_sizer.Add(cancel_button, 0, wx.ALL, 5)
+            button_panel.SetSizer(button_sizer)
+            sizer.Add(button_panel, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+
+            panel.SetSizer(sizer)
+            # 将panel作为对话框的主sizer
+            dialog_sizer = wx.BoxSizer(wx.VERTICAL)
+            dialog_sizer.Add(panel, 1, wx.EXPAND)
+            dialog.SetSizerAndFit(dialog_sizer)
+
+            # 绑定回车键事件到输入框
+            def on_input_enter(event):
+                dialog.EndModal(wx.ID_OK)
+                event.Skip()
+
+            # 绑定取消按钮事件以确保对话框正确关闭
+            def on_cancel(event):
+                dialog.EndModal(wx.ID_CANCEL)
+                event.Skip()
+
+            def on_dialog_close(event):
+                # 重置对话框打开状态
+                self._page_dialog_open = False
+                event.Skip()
+
+            page_input.Bind(wx.EVT_TEXT_ENTER, on_input_enter)
+            cancel_button.Bind(wx.EVT_BUTTON, on_cancel)
+            dialog.Bind(wx.EVT_CLOSE, on_dialog_close)
+
+            # 设置焦点到输入框
+            wx.CallAfter(page_input.SetFocus)
+            wx.CallAfter(page_input.SelectAll)
+
+            # 显示对话框
+            result = dialog.ShowModal()
+            # 重置对话框打开状态
+            self._page_dialog_open = False
+
+            if result == wx.ID_OK:
+                page_str = page_input.GetValue().strip()
                 try:
                     target_page = int(page_str)
                     if 1 <= target_page <= total_page:
@@ -1629,6 +1731,8 @@ class MainFrame(wx.Frame):
             dialog.Destroy()
 
         except Exception as e:
+            # 确保在异常情况下也重置状态
+            self._page_dialog_open = False
             print(f"页码跳转错误: {e}")
 
     def jump_to_page(self, target_page):
@@ -1683,12 +1787,21 @@ class MainFrame(wx.Frame):
     def show_reply_dialog(self):
         """显示回复对话框"""
         try:
+            # 防止重复打开对话框
+            if hasattr(self, '_reply_dialog_open') and self._reply_dialog_open:
+                return
+
             if not hasattr(self, 'current_tid') or not self.current_tid:
                 wx.MessageBox("请先选择要回复的帖子", "提示", wx.OK | wx.ICON_INFORMATION)
                 return
 
+            # 标记对话框为打开状态
+            self._reply_dialog_open = True
+
             # 创建回复对话框
             dialog = wx.Dialog(self, title="回复帖子", size=(500, 300))
+            dialog.SetExtraStyle(wx.WS_EX_CONTEXTHELP)
+
             panel = wx.Panel(dialog)
             sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -1715,9 +1828,33 @@ class MainFrame(wx.Frame):
             sizer.Add(button_panel, 0, wx.ALL | wx.ALIGN_CENTER, 5)
 
             panel.SetSizer(sizer)
+            # 将panel作为对话框的主sizer
+            dialog_sizer = wx.BoxSizer(wx.VERTICAL)
+            dialog_sizer.Add(panel, 1, wx.EXPAND)
+            dialog.SetSizerAndFit(dialog_sizer)
+
+            # 设置焦点到内容输入框
+            wx.CallAfter(content_ctrl.SetFocus)
+
+            # 绑定取消按钮事件以确保对话框正确关闭
+            def on_cancel(event):
+                dialog.EndModal(wx.ID_CANCEL)
+                event.Skip()
+
+            def on_dialog_close(event):
+                # 重置对话框打开状态
+                self._reply_dialog_open = False
+                event.Skip()
+
+            cancel_button.Bind(wx.EVT_BUTTON, on_cancel)
+            dialog.Bind(wx.EVT_CLOSE, on_dialog_close)
 
             # 显示对话框
-            if dialog.ShowModal() == wx.ID_OK:
+            result = dialog.ShowModal()
+            # 重置对话框打开状态
+            self._reply_dialog_open = False
+
+            if result == wx.ID_OK:
                 content = content_ctrl.GetValue().strip()
                 if content:
                     self.post_reply(content)
@@ -1727,6 +1864,8 @@ class MainFrame(wx.Frame):
             dialog.Destroy()
 
         except Exception as e:
+            # 确保在异常情况下也重置状态
+            self._reply_dialog_open = False
             print(f"显示回复对话框错误: {e}")
 
     def post_reply(self, content):
@@ -1808,14 +1947,13 @@ class MainFrame(wx.Frame):
         for message in messages:
             # 字段名映射：HTML解析器返回的是content、username、datetime
             content = message.get('content', '')
-            sender = message.get('username', '')
-            time = message.get('datetime', '')
 
-            if len(content) > 100:
-                content = content[:100] + '...'
+            # 消息内容已经包含了用户名和时间信息，直接使用
+            formatted_content = content
 
-            # 格式化显示内容
-            formatted_content = f"{sender} 在 {time} 说\n{content}"
+            # 如果内容太长，截断显示
+            if len(formatted_content) > 200:
+                formatted_content = formatted_content[:200] + '...'
 
             # 使用 DataViewListCtrl 的 AppendItem 方法，只显示内容列
             # 将消息信息存储在 list_data 数组中
