@@ -6,8 +6,12 @@
 import wx
 import os
 import sys
-from src.main_frame import MainFrame
-from src.config_manager import ConfigManager
+
+# 添加src目录到Python路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from main_frame import MainFrame
+from config_manager import ConfigManager
 
 def main():
     """主程序入口"""

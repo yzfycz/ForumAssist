@@ -6,7 +6,7 @@
 
 import requests
 from config.api_config import API_ENDPOINTS, ORDERBY_OPTIONS
-from .utils.html_parser import HTMLParser
+from utils.html_parser import HTMLParser
 
 class ForumClient:
     """论坛客户端"""

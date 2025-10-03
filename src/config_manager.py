@@ -6,7 +6,7 @@
 
 import os
 import configparser
-from .utils.crypto import CryptoManager
+from utils.crypto import CryptoManager
 
 class ConfigManager:
     """配置文件管理器"""

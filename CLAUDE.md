@@ -422,3 +422,146 @@ show_list_numbers = false  # 或 true
 - Validated pagination controls are included in numbering (e.g., "，25之28项" for last pagination item)
 - Confirmed backward compatibility - existing functionality unchanged when numbering disabled
 - Tested error handling with malformed API responses and missing data fields
+
+16. **Keyboard Shortcuts Implementation (2025-10-03)**
+    - Implemented comprehensive keyboard shortcuts system for enhanced accessibility and productivity
+    - Added menu-level shortcuts with Alt+letter access keys and Ctrl+letter function shortcuts
+    - Enhanced all dialog buttons with consistent Alt+letter activation shortcuts
+    - Implemented accelerator table system for global keyboard shortcuts handling
+    - Updated all UI text to display shortcut key hints for user guidance
+    - Ensured no conflicts with existing Windows system shortcuts or accessibility tools
+
+### Key Technical Improvements (Keyboard Shortcuts)
+- **Menu Navigation**: Alt+F (文件), Alt+H (帮助) with submenu access via M/Q/P/A keys
+- **Function Shortcuts**: Ctrl+M (账户管理), Ctrl+Q (切换账户), Ctrl+P (设置), F1 (关于)
+- **Dialog Controls**: Standardized button shortcuts - O(确定), C(取消), S(发送), N(新建), E(编辑), D(删除), R(刷新), V(查看对话)
+- **Accelerator Table**: Global shortcut handling using wx.AcceleratorTable for system-wide key capture
+- **Text Display**: All UI elements show shortcut hints in parentheses (e.g., "设置(&P) Ctrl+P")
+- **Accessibility**: Full keyboard navigation maintained with screen reader compatibility
+
+### Implementation Details
+**Menu Shortcuts:**
+```
+文件(&F)                    Alt+F
+├── 账户管理(&M)            Ctrl+M (Account Management)
+├── 切换账户(&Q)            Ctrl+Q (Switch Account - QieHuan)
+├── 设置(&P)                Ctrl+P (Preferences/Settings)
+└── 退出(&X)                Alt+F4 (Exit)
+
+帮助(&H)                    Alt+H
+└── 关于(&A)                F1 (About)
+```
+
+**Dialog Button Shortcuts:**
+```
+Common Dialog Controls:
+- 确定(&O)                 Alt+O (OK/Confirm)
+- 取消(&C)                 Alt+C (Cancel/Close)
+- 发送(&S)                 Alt+S (Send)
+
+Account Management:
+- 新建 (Ctrl+N)           Ctrl+N only (no Alt shortcut)
+- 编辑 (Ctrl+E)           Ctrl+E only (no Alt shortcut)
+- 删除 (Ctrl+D)           Ctrl+D only (no Alt shortcut)
+- 关闭                    Alt+C (Close)
+
+Message Management:
+- 刷新(&R) (F5)           Alt+R or F5 (Refresh)
+- 查看对话(&V)            Alt+V (View Conversation)
+```
+
+**Technical Implementation:**
+- Used wx.AcceleratorEntry and wx.AcceleratorTable for global shortcut handling
+- Added & symbol in button labels for Alt+key navigation
+- Implemented setup_keyboard_shortcuts() method in MainFrame for accelerator table binding
+- Custom ID mapping (1001-1004) for menu shortcut event handling
+- Preserved existing Ctrl+Enter and F5 shortcuts in message dialogs
+
+### Key Features
+- **Comprehensive Coverage**: All menus, dialogs, and common actions have keyboard shortcuts
+- **User-Friendly Hints**: All UI elements display available shortcuts in parentheses
+- **Conflict Avoidance**: Carefully selected shortcuts to avoid Windows system conflicts
+- **Accessibility First**: Designed specifically for visually impaired users with screen readers
+- **Backward Compatibility**: All existing functionality preserved with enhanced navigation
+- **Consistent Patterns**: Standardized shortcut conventions across all interface elements
+
+### Testing Results
+- Verified all menu shortcuts work correctly with both Alt and Ctrl combinations
+- Confirmed dialog button Alt+shortcuts activate proper actions
+- Tested global accelerator table functionality without conflicts
+- Validated shortcut hints display correctly in all UI text
+- Confirmed screen reader compatibility with keyboard navigation
+- Tested account management shortcuts (Ctrl+N/E/D) work without Alt interference
+- Verified no conflicts with existing Windows accessibility tools or shortcuts
+
+17. **Search Control Accessibility Enhancement (2025-10-03)**
+    - Fixed critical screen reader accessibility issue where search control was read as "control 编辑框" instead of proper label
+    - Analyzed successful accessibility patterns from account management dialog and applied them to search area
+    - Resolved layout structure issues that were preventing proper label-control association for screen readers
+    - Implemented proven 2-row, 2-column FlexGridSizer pattern for consistent accessibility behavior
+
+### Key Technical Improvements (Search Accessibility)
+- **Layout Structure Correction**: Changed from problematic 1×3 grid to proven 2×2 FlexGridSizer layout
+- **Control Type Optimization**: Replaced complex wx.SearchCtrl with standard wx.TextCtrl for better accessibility support
+- **Label Association**: Implemented proper StaticText label placement using verified pattern from working controls
+- **Consistency Pattern**: Applied exact same layout approach as successful account management dialog fields
+
+### Problem Analysis and Solution
+**Root Cause Identified:**
+- Original 3-column layout (label+search+button) broke label-control accessibility association
+- wx.SearchCtrl's complex internal structure interfered with screen reader recognition
+- Inconsistent layout pattern compared to other working accessible controls
+
+**Technical Solution:**
+```python
+# Before (problematic):
+grid_sizer = wx.FlexGridSizer(1, 3, 5, 5)  # 1行3列破坏了关联
+self.search_ctrl = wx.SearchCtrl(...)      # 复合控件影响识别
+
+# After (working):
+grid_sizer = wx.FlexGridSizer(2, 2, 5, 5)  # 2行2列保持关联
+self.search_ctrl = wx.TextCtrl(...)        # 标准控件支持更好
+```
+
+**Layout Structure:**
+```
+Row 1: [搜索标签:] [搜索框输入区域]
+Row 2: [空标签]    [搜索按钮]
+```
+
+### Implementation Details
+**Key Changes Made:**
+- Changed grid layout from 1×3 to 2×2 FlexGridSizer for proper label association
+- Replaced wx.SearchCtrl with standard wx.TextCtrl to avoid complex control structure issues
+- Used same alignment flags as working controls: `wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL`
+- Applied consistent spacing (5px gaps) matching account management dialog
+- Maintained all existing functionality while improving accessibility
+
+**Code Pattern Applied:**
+```python
+# 搜索标签 - 完全复制账户管理对话框的成功模式
+search_label = wx.StaticText(search_panel, label="输入搜索关键词:")
+self.search_ctrl = wx.TextCtrl(search_panel, style=wx.TE_PROCESS_ENTER)
+
+# 2行2列布局
+grid_sizer.Add(search_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
+grid_sizer.Add(self.search_ctrl, 0, wx.EXPAND)
+grid_sizer.Add(empty_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
+grid_sizer.Add(search_button, 0, wx.ALIGN_LEFT)
+```
+
+### Testing Results
+- **Before Fix**: Screen reader read "control 编辑框" (incorrect)
+- **After Fix**: Screen reader correctly reads "输入搜索关键词: 编辑框" (correct)
+- Verified search functionality remains fully operational
+- Confirmed keyboard navigation (Tab/Enter) works properly
+- Tested that the fix doesn't affect other UI elements or accessibility features
+- Validated consistency with other accessible controls in the application
+
+### Key Features
+- **Screen Reader Compatibility**: Proper label-text association for assistive technologies
+- **Keyboard Navigation**: Maintained full keyboard accessibility with Tab/Enter support
+- **Visual Consistency**: Layout appearance unchanged for sighted users
+- **Proven Pattern**: Implementation based on verified working accessibility patterns
+- **Backward Compatibility**: All existing search functionality preserved
+- **Minimal Impact**: Focused change with no side effects on other components

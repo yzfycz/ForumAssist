@@ -45,11 +45,11 @@ class SettingsDialog(wx.Dialog):
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # 确定按钮
-        ok_button = wx.Button(self, wx.ID_OK, "确定")
+        ok_button = wx.Button(self, wx.ID_OK, "确定(&O)")
         ok_button.Bind(wx.EVT_BUTTON, self.on_ok)
 
         # 取消按钮
-        cancel_button = wx.Button(self, wx.ID_CANCEL, "取消")
+        cancel_button = wx.Button(self, wx.ID_CANCEL, "取消(&C)")
         cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         button_sizer.AddStretchSpacer(1)

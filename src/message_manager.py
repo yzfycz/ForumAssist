@@ -5,8 +5,8 @@
 """
 
 import wx
-from .forum_client import ForumClient
-from .auth_manager import AuthenticationManager
+from forum_client import ForumClient
+from auth_manager import AuthenticationManager
 
 class MessageManager:
     """消息管理器"""
@@ -149,9 +149,9 @@ class MessageDialog(wx.Dialog):
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # 创建按钮
-        self.send_button = wx.Button(button_panel, label="发送 (Ctrl+Enter)")
-        self.refresh_button = wx.Button(button_panel, label="刷新 (F5)")
-        self.close_button = wx.Button(button_panel, label="关闭")
+        self.send_button = wx.Button(button_panel, label="发送(&S) (Ctrl+Enter)")
+        self.refresh_button = wx.Button(button_panel, label="刷新(&R) (F5)")
+        self.close_button = wx.Button(button_panel, label="关闭(&C)")
 
         # 添加按钮
         button_sizer.Add(self.send_button, 0, wx.ALL, 5)
@@ -313,9 +313,9 @@ class MessageListDialog(wx.Dialog):
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # 创建按钮
-        self.view_button = wx.Button(button_panel, label="查看对话")
-        self.refresh_button = wx.Button(button_panel, label="刷新 (F5)")
-        self.close_button = wx.Button(button_panel, label="关闭")
+        self.view_button = wx.Button(button_panel, label="查看对话(&V)")
+        self.refresh_button = wx.Button(button_panel, label="刷新(&R) (F5)")
+        self.close_button = wx.Button(button_panel, label="关闭(&C)")
 
         # 添加按钮
         button_sizer.Add(self.view_button, 0, wx.ALL, 5)

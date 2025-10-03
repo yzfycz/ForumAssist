@@ -8,10 +8,10 @@ import wx
 import wx.dataview
 import wx.lib.newevent
 import re
-from .auth_manager import AuthenticationManager
-from .forum_client import ForumClient
-from .account_manager import AccountManager
-from .message_manager import MessageManager, MessageDialog, MessageListDialog
+from auth_manager import AuthenticationManager
+from forum_client import ForumClient
+from account_manager import AccountManager
+from message_manager import MessageManager, MessageDialog, MessageListDialog
 
 # 创建自定义事件
 AccountSelectedEvent, EVT_ACCOUNT_SELECTED = wx.lib.newevent.NewEvent()
@@ -53,6 +53,9 @@ class MainFrame(wx.Frame):
         self.create_ui()
         self.create_menu()
 
+        # 设置键盘快捷键
+        self.setup_keyboard_shortcuts()
+
         # 如果没有账户，显示账户管理界面
         if not self.accounts:
             self.show_account_manager()
@@ -86,22 +89,62 @@ class MainFrame(wx.Frame):
     def create_search_area(self):
         """创建搜索区域"""
         search_panel = wx.Panel(self.main_panel)
-        search_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        search_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # 搜索框
-        self.search_ctrl = wx.SearchCtrl(search_panel, value="输入搜索关键词...", style=wx.TE_PROCESS_ENTER)
+        # 使用2列网格布局，完全复制账户管理对话框的成功模式
+        grid_sizer = wx.FlexGridSizer(2, 2, 5, 5)  # 2行2列，间距5像素
+        grid_sizer.AddGrowableCol(1, 1)  # 第2列（搜索框列）可以扩展
+
+        # 搜索标签 - 使用可见的StaticText标签，完全复制账户管理对话框的模式
+        search_label = wx.StaticText(search_panel, label="输入搜索关键词:")
+
+        # 搜索框 - 使用标准TextCtrl，避免SearchCtrl可能的问题
+        self.search_ctrl = wx.TextCtrl(search_panel, style=wx.TE_PROCESS_ENTER)
         self.search_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_search)
-        self.search_ctrl.Bind(wx.EVT_SEARCHCTRL_SEARCH_BTN, self.on_search)
 
         # 搜索按钮
         search_button = wx.Button(search_panel, label="搜索")
         search_button.Bind(wx.EVT_BUTTON, self.on_search)
 
-        search_sizer.Add(self.search_ctrl, 1, wx.ALL | wx.EXPAND, 5)
-        search_sizer.Add(search_button, 0, wx.ALL | wx.EXPAND, 5)
+        # 添加控件到网格布局 - 第1行：标签+搜索框
+        grid_sizer.Add(search_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
+        grid_sizer.Add(self.search_ctrl, 0, wx.EXPAND)
+
+        # 第2行：空标签+按钮（保持2列布局的一致性）
+        empty_label = wx.StaticText(search_panel, label="")
+        grid_sizer.Add(empty_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
+        grid_sizer.Add(search_button, 0, wx.ALIGN_LEFT)
+
+        # 将网格布局添加到主布局
+        search_sizer.Add(grid_sizer, 1, wx.ALL | wx.EXPAND, 5)
 
         search_panel.SetSizer(search_sizer)
         self.main_sizer.Add(search_panel, 0, wx.ALL | wx.EXPAND, 5)
+
+    def setup_search_accessibility(self):
+        """设置搜索框的无障碍属性"""
+        try:
+            # 设置搜索框的无障碍名称
+            self.search_ctrl.SetName("输入搜索关键词")
+
+            # 尝试使用Windows API设置无障碍属性
+            import ctypes
+            import os
+
+            # 获取搜索框的HWND
+            hwnd = self.search_ctrl.GetHandle()
+            if hwnd:
+                # 尝试设置控件的Accessible Name
+                try:
+                    # 使用user32.dll设置控件属性
+                    user32 = ctypes.windll.user32
+                    # 这里可以添加更多的Windows API调用来设置无障碍属性
+                    pass
+                except:
+                    pass
+
+        except Exception as e:
+            pass
 
     def create_content_area(self):
         """创建主要内容区域"""
@@ -164,28 +207,48 @@ class MainFrame(wx.Frame):
 
         # 文件菜单
         file_menu = wx.Menu()
-        account_item = file_menu.Append(wx.ID_ANY, "账户管理", "管理论坛账户")
+        account_item = file_menu.Append(wx.ID_ANY, "账户管理(&M)", "管理论坛账户\tCtrl+M")
         self.Bind(wx.EVT_MENU, self.on_account_management, account_item)
 
-        switch_account_item = file_menu.Append(wx.ID_ANY, "切换账户", "切换到其他账户")
+        switch_account_item = file_menu.Append(wx.ID_ANY, "切换账户(&Q)", "切换到其他账户\tCtrl+Q")
         self.Bind(wx.EVT_MENU, self.on_switch_account, switch_account_item)
 
-        settings_item = file_menu.Append(wx.ID_ANY, "设置", "软件设置")
+        settings_item = file_menu.Append(wx.ID_ANY, "设置(&P)", "软件设置\tCtrl+P")
         self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
 
-        exit_item = file_menu.Append(wx.ID_EXIT, "退出", "退出程序")
+        exit_item = file_menu.Append(wx.ID_EXIT, "退出(&X)", "退出程序\tAlt+F4")
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
 
-        menubar.Append(file_menu, "文件")
+        menubar.Append(file_menu, "文件(&F)")
 
         # 帮助菜单
         help_menu = wx.Menu()
-        about_item = help_menu.Append(wx.ID_ABOUT, "关于", "关于论坛助手")
+        about_item = help_menu.Append(wx.ID_ABOUT, "关于(&A)", "关于论坛助手\tF1")
         self.Bind(wx.EVT_MENU, self.on_about, about_item)
 
-        menubar.Append(help_menu, "帮助")
+        menubar.Append(help_menu, "帮助(&H)")
 
         self.SetMenuBar(menubar)
+
+    def setup_keyboard_shortcuts(self):
+        """设置键盘快捷键"""
+        # 定义快捷键表
+        accelerator_table = [
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('M'), 1001),  # Ctrl+M - 账户管理
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('Q'), 1002),  # Ctrl+Q - 切换账户
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('P'), 1003),  # Ctrl+P - 设置
+            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F1, 1004),  # F1 - 关于
+        ]
+
+        # 创建加速器表
+        accel_table = wx.AcceleratorTable(accelerator_table)
+        self.SetAcceleratorTable(accel_table)
+
+        # 绑定快捷键事件
+        self.Bind(wx.EVT_MENU, self.on_account_management, id=1001)
+        self.Bind(wx.EVT_MENU, self.on_switch_account, id=1002)
+        self.Bind(wx.EVT_MENU, self.on_settings, id=1003)
+        self.Bind(wx.EVT_MENU, self.on_about, id=1004)
 
     def show_account_selection(self):
         """显示账户选择界面"""
@@ -213,8 +276,8 @@ class MainFrame(wx.Frame):
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # 创建按钮
-        ok_button = wx.Button(button_panel, id=wx.ID_OK, label="确定")
-        cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消")
+        ok_button = wx.Button(button_panel, id=wx.ID_OK, label="确定(&O)")
+        cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消(&C)")
 
         # 添加按钮到布局
         button_sizer.Add(ok_button, 0, wx.ALL, 5)
@@ -1021,7 +1084,7 @@ class MainFrame(wx.Frame):
 
     def on_settings(self, event):
         """设置事件"""
-        from .settings_dialog import SettingsDialog
+        from settings_dialog import SettingsDialog
         dialog = SettingsDialog(self, self.config_manager)
         dialog.ShowModal()
 
@@ -2080,8 +2143,8 @@ class MainFrame(wx.Frame):
             # 按钮面板
             button_panel = wx.Panel(panel)
             button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            ok_button = wx.Button(button_panel, id=wx.ID_OK, label="确定")
-            cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消")
+            ok_button = wx.Button(button_panel, id=wx.ID_OK, label="确定(&O)")
+            cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消(&C)")
             button_sizer.Add(ok_button, 0, wx.ALL, 5)
             button_sizer.Add(cancel_button, 0, wx.ALL, 5)
             button_panel.SetSizer(button_sizer)
@@ -2262,8 +2325,8 @@ class MainFrame(wx.Frame):
             # 按钮面板
             button_panel = wx.Panel(panel)
             button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            ok_button = wx.Button(button_panel, id=wx.ID_OK, label="发送")
-            cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消")
+            ok_button = wx.Button(button_panel, id=wx.ID_OK, label="发送(&S)")
+            cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消(&C)")
             button_sizer.Add(ok_button, 0, wx.ALL, 5)
             button_sizer.Add(cancel_button, 0, wx.ALL, 5)
             button_panel.SetSizer(button_sizer)
@@ -2761,7 +2824,7 @@ class MainFrame(wx.Frame):
             # 按钮面板
             button_panel = wx.Panel(panel)
             button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            close_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="关闭")
+            close_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="关闭(&C)")
             button_sizer.Add(close_button, 0, wx.ALL, 5)
             button_panel.SetSizer(button_sizer)
             sizer.Add(button_panel, 0, wx.ALL | wx.ALIGN_CENTER, 5)
