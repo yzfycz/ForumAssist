@@ -2414,13 +2414,39 @@ class MainFrame(wx.Frame):
             # 确保在异常情况下也重置状态
             self._reply_dialog_open = False
 
+    def prepare_reply_content(self, text):
+        """
+        准备回复内容，将每一行用<p>标签包裹
+
+        Args:
+            text: 用户输入的文本
+
+        Returns:
+            str: 处理后的内容，每一行都用<p>标签包裹
+        """
+        if not text:
+            return ''
+
+        # 按换行符分割文本
+        lines = text.split('\n')
+
+        # 将每一行用<p>标签包裹
+        wrapped_lines = []
+        for line in lines:
+            wrapped_lines.append(f'<p>{line}</p>')
+
+        # 将所有行连接起来
+        return ''.join(wrapped_lines)
+
     def post_reply(self, content):
         """发送回复"""
         try:
             if not hasattr(self, 'current_tid') or not self.current_tid:
                 return
 
-            success = self.forum_client.post_reply(self.current_forum, self.current_tid, content)
+            # 准备回复内容，转换换行符
+            prepared_content = self.prepare_reply_content(content)
+            success = self.forum_client.post_reply(self.current_forum, self.current_tid, prepared_content)
             if success:
                 wx.MessageBox("回复发送成功", "成功", wx.OK | wx.ICON_INFORMATION)
                 # 刷新当前页面

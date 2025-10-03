@@ -605,3 +605,50 @@ message = result.get('message', {})
 - Tested automatic focus jumping works correctly for improved keyboard navigation
 - Validated empty result notifications show appropriate user-friendly messages
 - Ensured consistency across all search result display paths and navigation scenarios
+
+19. **Reply Content Line Break Enhancement (2025-10-03)**
+    - Enhanced reply content processing to use `<p>` tags instead of `<br>` tags for better forum compatibility
+    - Implemented line-by-line wrapping where each line of user input is wrapped with `<p>` and `</p>` tags
+    - Improved display format to match forum's native HTML structure for proper line break rendering
+
+### Key Technical Improvements (Reply Content Enhancement)
+- **HTML Structure Compatibility**: Changed from `<br>` tags to `<p>` tags to match forum's native HTML format
+- **Line-by-Line Processing**: Each line (including empty lines) is wrapped with paragraph tags for consistent formatting
+- **HTML Tag Preservation**: User input HTML tags are preserved and work correctly within paragraph structure
+- **Forum Integration**: Better integration with forum's content display system
+
+### Implementation Details
+**Content Processing Logic:**
+```python
+# Before (using <br> tags)
+return text.replace('\n', '<br>')
+
+# After (using <p> tags)
+lines = text.split('\n')
+wrapped_lines = []
+for line in lines:
+    wrapped_lines.append(f'<p>{line}</p>')
+return ''.join(wrapped_lines)
+```
+
+**Example Transformation:**
+```
+User Input:
+第一行内容
+
+第二行内容
+<b>加粗文字</b>
+
+HTML Output:
+<p>第一行内容</p>
+<p></p>
+<p>第二行内容</p>
+<p><b>加粗文字</b></p>
+<p></p>
+```
+
+### Key Features
+- **Paragraph-Based Structure**: Each line becomes a separate paragraph for better HTML semantics
+- **Empty Line Preservation**: Empty lines are preserved as empty paragraphs for user-controlled spacing
+- **HTML Compatibility**: User-input HTML tags work correctly within the paragraph structure
+- **Forum Native Format**: Output format matches forum's expected HTML structure for optimal display
