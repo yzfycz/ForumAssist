@@ -16,6 +16,121 @@ from message_manager import MessageManager, MessageDialog, MessageListDialog
 # 创建自定义事件
 AccountSelectedEvent, EVT_ACCOUNT_SELECTED = wx.lib.newevent.NewEvent()
 
+class CodeGeneratorDialog(wx.Dialog):
+    """代码生成对话框"""
+
+    def __init__(self, parent, title="添加代码"):
+        """
+        初始化代码生成对话框
+
+        Args:
+            parent: 父窗口
+            title: 对话框标题
+        """
+        super().__init__(parent, title=title, size=(400, 250))
+
+        self.generated_code = None  # 存储生成的代码
+
+        panel = wx.Panel(self)
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # 代码类型选择
+        type_label = wx.StaticText(panel, label="代码类型:")
+        self.type_combo = wx.ComboBox(panel, choices=["超链接", "音频", "图片"], value="超链接", style=wx.CB_READONLY)
+        self.type_combo.Bind(wx.EVT_COMBOBOX, self.on_type_changed)
+
+        # 输入字段
+        field_label_1 = wx.StaticText(panel, label="超链接名字:")
+        self.field_1 = wx.TextCtrl(panel)
+
+        field_label_2 = wx.StaticText(panel, label="超链接地址:")
+        self.field_2 = wx.TextCtrl(panel)
+
+        # 按钮
+        button_panel = wx.Panel(panel)
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        ok_button = wx.Button(button_panel, id=wx.ID_OK, label="确定(&O)")
+        cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消(&C)")
+        button_sizer.Add(ok_button, 0, wx.ALL, 5)
+        button_sizer.Add(cancel_button, 0, wx.ALL, 5)
+        button_panel.SetSizer(button_sizer)
+
+        # 使用GridBagSizer进行布局
+        grid_sizer = wx.GridBagSizer(5, 5)
+        grid_sizer.Add(type_label, pos=(0, 0), flag=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
+        grid_sizer.Add(self.type_combo, pos=(0, 1), flag=wx.EXPAND)
+        grid_sizer.Add(field_label_1, pos=(1, 0), flag=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
+        grid_sizer.Add(self.field_1, pos=(1, 1), flag=wx.EXPAND)
+        grid_sizer.Add(field_label_2, pos=(2, 0), flag=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
+        grid_sizer.Add(self.field_2, pos=(2, 1), flag=wx.EXPAND)
+
+        # 设置行列增长
+        grid_sizer.AddGrowableCol(1, 1)
+
+        main_sizer.Add(grid_sizer, 1, wx.ALL | wx.EXPAND, 10)
+        main_sizer.Add(button_panel, 0, wx.ALL | wx.ALIGN_CENTER, 5)
+
+        panel.SetSizer(main_sizer)
+        dialog_sizer = wx.BoxSizer(wx.VERTICAL)
+        dialog_sizer.Add(panel, 1, wx.EXPAND)
+        self.SetSizerAndFit(dialog_sizer)
+
+        # 保存标签控件的引用以便后续修改
+        self.field_label_1 = field_label_1
+        self.field_label_2 = field_label_2
+
+        # 绑定确定按钮事件
+        ok_button.Bind(wx.EVT_BUTTON, self.on_ok)
+
+        # 设置焦点到第一个输入框
+        self.Bind(wx.EVT_SHOW, self.on_dialog_show)
+
+    def on_dialog_show(self, event):
+        """对话框显示时设置焦点"""
+        wx.CallAfter(self.type_combo.SetFocus)
+        event.Skip()
+
+    def on_type_changed(self, event):
+        """处理代码类型改变事件"""
+        selected_type = self.type_combo.GetValue()
+
+        if selected_type == "超链接":
+            self.field_label_1.SetLabel("超链接名字:")
+            self.field_label_2.SetLabel("超链接地址:")
+        elif selected_type == "图片":
+            self.field_label_1.SetLabel("图片名称:")
+            self.field_label_2.SetLabel("图片地址:")
+        elif selected_type == "音频":
+            self.field_label_1.SetLabel("音频名称:")
+            self.field_label_2.SetLabel("音频地址:")
+
+        # 清空输入框
+        self.field_1.SetValue("")
+        self.field_2.SetValue("")
+
+        # 重新布局
+        self.Layout()
+
+    def on_ok(self, event):
+        """处理确定按钮事件"""
+        selected_type = self.type_combo.GetValue()
+        field_1_value = self.field_1.GetValue().strip()
+        field_2_value = self.field_2.GetValue().strip()
+
+        if not field_1_value or not field_2_value:
+            wx.MessageBox("请填写完整信息", "提示", wx.OK | wx.ICON_WARNING)
+            return
+
+        # 根据类型生成代码
+        if selected_type == "超链接":
+            self.generated_code = f'<a href="{field_2_value}">{field_1_value}</a>'
+        elif selected_type == "图片":
+            self.generated_code = f'<a href="{field_2_value}"><img alt="{field_1_value}" src="{field_2_value}" /></a>'
+        elif selected_type == "音频":
+            self.generated_code = f'<audio controls="controls" src="{field_2_value}" title="{field_1_value}"> </audio>'
+
+        self.EndModal(wx.ID_OK)
+
 class MainFrame(wx.Frame):
     """主窗口框架"""
 
@@ -2367,8 +2482,10 @@ class MainFrame(wx.Frame):
             # 按钮面板
             button_panel = wx.Panel(panel)
             button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            add_code_button = wx.Button(button_panel, label="添加代码(&J)")
             ok_button = wx.Button(button_panel, id=wx.ID_OK, label="发送(&S)")
             cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消(&C)")
+            button_sizer.Add(add_code_button, 0, wx.ALL, 5)
             button_sizer.Add(ok_button, 0, wx.ALL, 5)
             button_sizer.Add(cancel_button, 0, wx.ALL, 5)
             button_panel.SetSizer(button_sizer)
@@ -2383,6 +2500,27 @@ class MainFrame(wx.Frame):
             # 设置焦点到内容输入框
             wx.CallAfter(content_ctrl.SetFocus)
 
+            # 绑定添加代码按钮事件
+            def on_add_code(event):
+                # 打开代码生成对话框
+                code_dialog = CodeGeneratorDialog(dialog)
+                result = code_dialog.ShowModal()
+
+                if result == wx.ID_OK and code_dialog.generated_code:
+                    # 将生成的代码插入到内容编辑框
+                    current_content = content_ctrl.GetValue()
+                    cursor_pos = content_ctrl.GetInsertionPoint()
+
+                    # 在光标位置插入代码
+                    new_content = current_content[:cursor_pos] + code_dialog.generated_code + current_content[cursor_pos:]
+                    content_ctrl.SetValue(new_content)
+
+                    # 将光标移动到插入代码的后面
+                    content_ctrl.SetInsertionPoint(cursor_pos + len(code_dialog.generated_code))
+                    content_ctrl.SetFocus()
+
+                code_dialog.Destroy()
+
             # 绑定取消按钮事件以确保对话框正确关闭
             def on_cancel(event):
                 dialog.EndModal(wx.ID_CANCEL)
@@ -2393,6 +2531,7 @@ class MainFrame(wx.Frame):
                 self._reply_dialog_open = False
                 event.Skip()
 
+            add_code_button.Bind(wx.EVT_BUTTON, on_add_code)
             cancel_button.Bind(wx.EVT_BUTTON, on_cancel)
             dialog.Bind(wx.EVT_CLOSE, on_dialog_close)
 

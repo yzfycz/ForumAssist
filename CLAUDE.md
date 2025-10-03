@@ -652,3 +652,66 @@ HTML Output:
 - **Empty Line Preservation**: Empty lines are preserved as empty paragraphs for user-controlled spacing
 - **HTML Compatibility**: User-input HTML tags work correctly within the paragraph structure
 - **Forum Native Format**: Output format matches forum's expected HTML structure for optimal display
+
+20. **Code Generator Feature Implementation (2025-10-03)**
+    - Implemented comprehensive code generator functionality in reply dialog for easy HTML code insertion
+    - Added "添加代码(&J)" button to reply dialog with keyboard shortcut support
+    - Created CodeGeneratorDialog class with dynamic field labels based on selected code type
+    - Supported code types: 超链接, 音频, 图片 (in that order)
+    - Implemented smart code insertion at cursor position with automatic focus management
+    - Enhanced user experience with proper focus behavior and keyboard navigation
+
+### Key Technical Improvements (Code Generator Feature)
+- **Dynamic Dialog Interface**: Field labels automatically update based on selected code type
+- **Smart Code Insertion**: Generated code is inserted at cursor position with proper focus restoration
+- **Comprehensive Code Support**: Multiple code types with proper HTML formatting:
+  - 超链接: `<a href="地址">名称</a>`
+  - 音频: `<audio controls="controls" src="地址" title="名称"> </audio>`
+  - 图片: `<a href="地址"><img alt="名称" src="地址" /></a>`
+- **Focus Management**: Default focus on combo box for easy type selection, proper focus handling after insertion
+- **Keyboard Accessibility**: Full keyboard navigation with Alt+J shortcut for code generator access
+
+### Implementation Details
+**Code Generator Dialog Structure:**
+```
+┌─────────────────────────┐
+│ 添加代码                 │
+├─────────────────────────┤
+│ 代码类型: [超链接▼]      │
+│                         │
+│ 超链接名字: [        ]  │
+│ 超链接地址: [        ]  │
+│                         │
+│ [确定]     [取消]        │
+└─────────────────────────┘
+```
+
+**Dynamic Field Labels:**
+- **超链接**: 超链接名字 + 超链接地址
+- **音频**: 音频名称 + 音频地址
+- **图片**: 图片名称 + 图片地址
+
+**Code Insertion Logic:**
+```python
+# Insert generated code at cursor position
+current_content = content_ctrl.GetValue()
+cursor_pos = content_ctrl.GetInsertionPoint()
+new_content = current_content[:cursor_pos] + generated_code + current_content[cursor_pos:]
+content_ctrl.SetValue(new_content)
+content_ctrl.SetInsertionPoint(cursor_pos + len(generated_code))
+```
+
+### Key Features
+- **Multi-Type Support**: Three code types with optimized HTML formatting for forum use
+- **User-Friendly Interface**: Simple dialog with clear labeling and intuitive layout
+- **Smart Integration**: Seamless integration with existing reply dialog functionality
+- **Focus Optimization**: Default focus on combo box for type selection, automatic focus return after insertion
+- **Keyboard Navigation**: Full keyboard accessibility with proper tab order and shortcuts
+- **Error Handling**: Input validation with user-friendly error messages
+
+### Testing Results
+- Verified all code types generate correct HTML output with proper formatting
+- Confirmed dynamic label updates work correctly for different code types
+- Tested code insertion at various cursor positions within existing content
+- Validated keyboard navigation and focus management across all dialog elements
+- Confirmed proper integration with existing reply dialog functionality
