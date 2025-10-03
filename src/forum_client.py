@@ -417,10 +417,14 @@ class ForumClient:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('status') == 1:
-                    data = result.get('data', {})
+                    # 搜索内容在 message.threadlist 中，不是 data.threadlist（与其他API一致）
+                    message = result.get('message', {})
                     return {
-                        "threadlist": data.get('threadlist', []),
-                        "pagination": data.get('pagination', {})
+                        "threadlist": message.get('threadlist', []),
+                        "pagination": {
+                            "page": message.get('page', page),
+                            "totalpage": message.get('totalpage', 1)
+                        }
                     }
 
         except Exception as e:

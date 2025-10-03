@@ -565,3 +565,43 @@ grid_sizer.Add(search_button, 0, wx.ALIGN_LEFT)
 - **Proven Pattern**: Implementation based on verified working accessibility patterns
 - **Backward Compatibility**: All existing search functionality preserved
 - **Minimal Impact**: Focused change with no side effects on other components
+
+18. **Search Functionality and HTML Tag Cleaning Fixes (2025-10-03)**
+    - Fixed search API data path issue where search was returning no results due to incorrect data structure access
+    - Implemented comprehensive HTML tag cleaning across all search result display paths
+    - Enhanced user experience with automatic focus jumping to first search result and empty result notifications
+    - Added proper HTML tag cleaning in navigation restoration to prevent HTML code display when returning from post details
+
+### Key Technical Improvements (Search and HTML Cleaning)
+- **API Data Path Fix**: Corrected search method in forum_client.py to access `result.message` instead of `result.data`
+- **HTML Tag Cleaning**: Implemented consistent HTML tag removal using existing `clean_html_tags()` utility function
+- **Empty Result Handling**: Added user-friendly notifications with warning icon when no search results found
+- **Automatic Focus Management**: Implemented automatic focus jumping to first search result for improved navigation
+- **Navigation Consistency**: Ensured HTML tag cleaning is applied to all possible navigation paths including back navigation
+
+### Implementation Details
+**Fixed Search API Data Path:**
+```python
+# Before (forum_client.py)
+message = result.get('data', {})
+
+# After (forum_client.py)
+message = result.get('message', {})
+```
+
+**HTML Tag Cleaning Implementation:**
+- **Initial Search**: `search_content()` method cleans HTML tags before displaying results
+- **Navigation Return**: `search_content_and_restore_focus()` method ensures clean display when returning from post details
+- **Pagination Restoration**: `restore_to_correct_page()` method cleans HTML tags when restoring search results with pagination
+
+**User Experience Enhancements:**
+- Automatic focus jumps to first search result after successful search
+- Warning dialog with appropriate icon displayed when no results found
+- Consistent clean display across all navigation scenarios
+
+### Testing Results
+- Verified search functionality returns correct results with proper data structure access
+- Confirmed HTML tags are properly cleaned in all display scenarios including back navigation
+- Tested automatic focus jumping works correctly for improved keyboard navigation
+- Validated empty result notifications show appropriate user-friendly messages
+- Ensured consistency across all search result display paths and navigation scenarios

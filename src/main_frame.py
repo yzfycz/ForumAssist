@@ -705,8 +705,18 @@ class MainFrame(wx.Frame):
     def search_content_and_restore_focus(self, keyword):
         """搜索内容并恢复焦点"""
         result = self.forum_client.search(self.current_forum, keyword)
+        threads = result.get('threadlist', [])
+
+        # 清理搜索结果中的HTML标签
+        cleaned_threads = []
+        for thread in threads:
+            cleaned_thread = thread.copy()
+            if 'subject' in cleaned_thread:
+                cleaned_thread['subject'] = self.clean_html_tags(cleaned_thread['subject'])
+            cleaned_threads.append(cleaned_thread)
+
         self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
-        self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
+        self.display_threads_and_restore_focus(cleaned_threads, result.get('pagination', {}), 'search_result')
 
     
   
@@ -810,7 +820,17 @@ class MainFrame(wx.Frame):
             elif content_type == 'search_result' and 'keyword' in params:
                 # 跳转到搜索结果的指定页面
                 result = self.forum_client.search(self.current_forum, params['keyword'], page)
-                self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
+                threads = result.get('threadlist', [])
+
+                # 清理搜索结果中的HTML标签
+                cleaned_threads = []
+                for thread in threads:
+                    cleaned_thread = thread.copy()
+                    if 'subject' in cleaned_thread:
+                        cleaned_thread['subject'] = self.clean_html_tags(cleaned_thread['subject'])
+                    cleaned_threads.append(cleaned_thread)
+
+                self.display_threads(cleaned_threads, result.get('pagination', {}), 'search_result')
                 return True
             elif content_type == 'home_content' and 'orderby' in params:
                 # 跳转到首页内容的指定页面
@@ -1396,7 +1416,29 @@ class MainFrame(wx.Frame):
         """搜索内容"""
         self.current_keyword = keyword
         result = self.forum_client.search(self.current_forum, keyword)
-        self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'search_result')
+        threads = result.get('threadlist', [])
+
+        # 检查是否有搜索结果
+        if not threads:
+            wx.MessageBox(f"没有找到包含 '{keyword}' 的内容", "搜索结果", wx.OK | wx.ICON_WARNING)
+            return
+
+        # 清理搜索结果中的HTML标签
+        cleaned_threads = []
+        for thread in threads:
+            cleaned_thread = thread.copy()
+            # 清理标题中的HTML标签
+            if 'subject' in cleaned_thread:
+                cleaned_thread['subject'] = self.clean_html_tags(cleaned_thread['subject'])
+            cleaned_threads.append(cleaned_thread)
+
+        # 显示搜索结果
+        self.display_threads(cleaned_threads, result.get('pagination', {}), 'search_result')
+
+        # 搜索成功后自动跳到列表第一项
+        if self.list_ctrl.GetItemCount() > 0:
+            self.list_ctrl.SelectRow(0)
+            self.list_ctrl.SetFocus()
 
     def display_threads(self, threads, pagination=None, content_type='thread_list', api_params=None):
         """显示帖子列表 - DataViewListCtrl版本"""
@@ -1417,7 +1459,7 @@ class MainFrame(wx.Frame):
 
         for thread in threads:
             # 构建新的显示格式
-            subject = thread.get('subject', '')
+            subject = self.clean_html_tags(thread.get('subject', ''))
             username = thread.get('username', '')
             views = thread.get('views', 0)
             forumname = thread.get('forumname', '')
