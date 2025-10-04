@@ -8,6 +8,7 @@ import wx
 import wx.dataview
 import wx.lib.newevent
 import re
+import webbrowser
 from auth_manager import AuthenticationManager
 from forum_client import ForumClient
 from account_manager import AccountManager
@@ -312,6 +313,7 @@ class MainFrame(wx.Frame):
         self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.on_list_activated)
         self.list_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_list_key_down)
         self.list_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_list_focus)
+        self.list_ctrl.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
 
         list_sizer.Add(self.list_ctrl, 1, wx.ALL | wx.EXPAND, 5)
         self.list_panel.SetSizer(list_sizer)
@@ -353,6 +355,10 @@ class MainFrame(wx.Frame):
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('Q'), 1002),  # Ctrl+Q - 切换账户
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('P'), 1003),  # Ctrl+P - 设置
             wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F1, 1004),  # F1 - 关于
+            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F5, 1005),  # F5 - 刷新
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W'), 1006),  # Ctrl+W - 网页打开
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('C'), 1007),  # Ctrl+C - 拷贝帖子标题
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('D'), 1008),  # Ctrl+D - 拷贝帖子地址
         ]
 
         # 创建加速器表
@@ -364,6 +370,10 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_switch_account, id=1002)
         self.Bind(wx.EVT_MENU, self.on_settings, id=1003)
         self.Bind(wx.EVT_MENU, self.on_about, id=1004)
+        self.Bind(wx.EVT_MENU, self.on_refresh, id=1005)
+        self.Bind(wx.EVT_MENU, self.on_open_in_browser, id=1006)
+        self.Bind(wx.EVT_MENU, self.on_copy_title, id=1007)
+        self.Bind(wx.EVT_MENU, self.on_copy_url, id=1008)
 
     def show_account_selection(self):
         """显示账户选择界面"""
@@ -1153,6 +1163,43 @@ class MainFrame(wx.Frame):
             pass
         event.Skip()
 
+    def on_list_context_menu(self, event):
+        """处理列表右键菜单/上下文菜单"""
+        try:
+            # 获取当前选中项
+            selected_row = self.list_ctrl.GetSelectedRow()
+            if selected_row == -1 or selected_row >= len(self.list_data):
+                return
+
+            # 检查选中项的数据，只在有效的帖子项上显示菜单
+            item_data = self.list_data[selected_row]
+            if item_data.get('type') == 'pagination':
+                return
+
+            # 创建菜单
+            menu = wx.Menu()
+
+            # 添加菜单项
+            refresh_item = menu.Append(wx.ID_ANY, "刷新\tF5")
+            menu.AppendSeparator()
+            open_web_item = menu.Append(wx.ID_ANY, "网页打开(&W)\tCtrl+W")
+            copy_title_item = menu.Append(wx.ID_ANY, "拷贝帖子标题\tCtrl+C")
+            copy_url_item = menu.Append(wx.ID_ANY, "拷贝帖子地址\tCtrl+D")
+
+            # 绑定事件
+            self.Bind(wx.EVT_MENU, self.on_refresh, refresh_item)
+            self.Bind(wx.EVT_MENU, self.on_open_in_browser, open_web_item)
+            self.Bind(wx.EVT_MENU, self.on_copy_title, copy_title_item)
+            self.Bind(wx.EVT_MENU, self.on_copy_url, copy_url_item)
+
+            # 显示菜单
+            self.PopupMenu(menu)
+            menu.Destroy()
+
+        except Exception as e:
+            # 静默处理异常，避免影响用户体验
+            pass
+
     def handle_row_activation(self, selected_row):
         """处理行激活的通用逻辑"""
         try:
@@ -1227,6 +1274,199 @@ class MainFrame(wx.Frame):
         self.reload_current_list()
 
         dialog.Destroy()
+
+    def on_refresh(self, event):
+        """刷新当前内容"""
+        # 保存当前状态以便刷新后恢复焦点
+        selected_row = self.list_ctrl.GetSelectedRow()
+        if selected_row != -1:
+            self.saved_list_index = 0  # 刷新后定位到第一个项目
+
+        # 根据不同内容类型调用相应的刷新方法
+        if hasattr(self, 'current_content_type'):
+            if self.current_content_type == 'thread_list':
+                # 重新加载当前板块
+                if hasattr(self, 'current_fid') and self.current_fid:
+                    self.load_forum_section_with_type(None, self.current_fid,
+                                                      self.current_api_params.get('typeid1'),
+                                                      self.current_api_params.get('typeid2'))
+            elif self.current_content_type == 'thread_detail':
+                # 重新加载帖子详情
+                if hasattr(self, 'current_thread_info') and self.current_thread_info:
+                    tid = self.current_thread_info.get('tid')
+                    if tid:
+                        self.load_thread_detail(tid)
+            elif self.current_content_type == 'home_content':
+                # 重新加载首页内容
+                if hasattr(self, 'current_orderby'):
+                    if self.current_orderby == 'latest':
+                        self.load_latest_threads_and_restore_focus()
+                    elif self.current_orderby == 'lastpost':
+                        self.load_latest_replies_and_restore_focus()
+            elif self.current_content_type == 'user_threads':
+                # 重新加载我的发表
+                self.load_my_threads_and_restore_focus()
+            elif self.current_content_type == 'user_posts':
+                # 重新加载我的回复
+                self.load_my_posts_and_restore_focus()
+            elif self.current_content_type == 'message_list':
+                # 重新加载消息列表
+                self.load_messages()
+                # 消息列表刷新后也设置焦点到第一个项目
+                if self.list_ctrl.GetItemCount() > 0:
+                    self.saved_list_index = 0
+                    wx.CallAfter(self.reset_keyboard_cursor, 0)
+            elif self.current_content_type == 'message_detail':
+                # 重新加载消息详情
+                if hasattr(self, 'current_touid') and self.current_touid:
+                    self.load_message_detail(self.current_touid)
+            elif self.current_content_type == 'search_result':
+                # 重新加载搜索结果
+                if hasattr(self, 'current_keyword') and self.current_keyword:
+                    self.search_content_and_restore_focus(self.current_keyword)
+
+    def get_selected_thread_data(self):
+        """获取当前选中的帖子数据"""
+        try:
+            selected_row = self.list_ctrl.GetSelectedRow()
+            if selected_row == -1 or selected_row >= len(self.list_data):
+                return None
+
+            item_data = self.list_data[selected_row]
+            if item_data.get('type') == 'pagination':
+                return None
+
+            return item_data
+        except Exception:
+            return None
+
+    def build_thread_url(self, thread_data):
+        """构建帖子的URL地址"""
+        try:
+            if not thread_data:
+                return None
+
+            # 获取帖子ID
+            tid = thread_data.get('tid')
+            if not tid:
+                return None
+
+            # 获取当前论坛URL
+            if hasattr(self, 'current_forum_config') and self.current_forum_config:
+                forum_url = self.current_forum_config.get('url', '').rstrip('/')
+            else:
+                # 默认使用争渡论坛的URL格式
+                forum_url = 'http://www.zd.hk'
+
+            # 构建标准格式的帖子URL
+            thread_url = f"{forum_url}/thread-{tid}-1-1.html"
+            return thread_url
+
+        except Exception:
+            return None
+
+    def on_open_in_browser(self, event):
+        """在浏览器中打开帖子"""
+        try:
+            # 获取选中的帖子数据
+            thread_data = self.get_selected_thread_data()
+            if not thread_data:
+                return
+
+            # 构建URL
+            url = self.build_thread_url(thread_data)
+            if not url:
+                return
+
+            # 在默认浏览器中打开
+            webbrowser.open(url)
+
+        except Exception:
+            # 静默处理异常
+            pass
+
+    def copy_to_clipboard(self, text):
+        """使用系统剪贴板API复制文本到剪贴板"""
+        try:
+            import subprocess
+            import platform
+
+            # 移除多余的序号信息（如果存在）
+            # 例如："标题内容 ，1之24项" -> "标题内容"
+            cleaned_text = text
+            if '，' in text and '项' in text:
+                # 移除末尾的序号信息
+                cleaned_text = text.split('，')[0]
+
+            # 根据不同操作系统使用相应的系统剪贴板命令
+            if platform.system() == 'Windows':
+                # Windows系统使用clip命令
+                subprocess.run(['clip'], input=cleaned_text.strip().encode('gbk'), check=True, shell=True)
+            elif platform.system() == 'Darwin':  # macOS
+                # macOS使用pbcopy命令
+                subprocess.run(['pbcopy'], input=cleaned_text.strip().encode('utf-8'), check=True)
+            else:  # Linux及其他系统
+                # Linux使用xclip命令（如果可用）
+                try:
+                    subprocess.run(['xclip', '-selection', 'clipboard'],
+                                 input=cleaned_text.strip().encode('utf-8'), check=True)
+                except (FileNotFoundError, subprocess.CalledProcessError):
+                    # 如果xclip不可用，尝试使用xsel
+                    try:
+                        subprocess.run(['xsel', '--clipboard', '--input'],
+                                     input=cleaned_text.strip().encode('utf-8'), check=True)
+                    except (FileNotFoundError, subprocess.CalledProcessError):
+                        # 如果都不可用，回退到wxPython
+                        if wx.TheClipboard.Open():
+                            try:
+                                wx.TheClipboard.SetData(wx.TextDataObject(cleaned_text))
+                                wx.TheClipboard.Close()
+                            except Exception:
+                                wx.TheClipboard.Close()
+        except Exception:
+            # 静默处理异常
+            pass
+
+    def on_copy_title(self, event):
+        """拷贝帖子标题到剪贴板"""
+        try:
+            # 获取当前选中的行
+            selected_row = self.list_ctrl.GetSelectedRow()
+            if selected_row == -1:
+                return
+
+            # 直接获取列表第一列的显示文本
+            # 这就是用户看到的文本内容，无需额外处理
+            display_text = self.list_ctrl.GetTextValue(selected_row, 0)
+            if not display_text:
+                return
+
+            # 复制到剪贴板
+            self.copy_to_clipboard(display_text)
+
+        except Exception:
+            # 静默处理异常
+            pass
+
+    def on_copy_url(self, event):
+        """拷贝帖子地址到剪贴板"""
+        try:
+            # 获取选中的帖子数据
+            thread_data = self.get_selected_thread_data()
+            if not thread_data:
+                return
+
+            # 构建URL
+            url = self.build_thread_url(thread_data)
+            if not url:
+                return
+
+            # 使用系统剪贴板API复制到剪贴板
+            self.copy_to_clipboard(url)
+
+        except Exception:
+            # 静默处理异常
+            pass
 
     def reload_current_list(self):
         """重新加载当前列表以应用设置变更"""

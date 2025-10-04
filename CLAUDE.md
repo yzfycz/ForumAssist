@@ -715,3 +715,104 @@ content_ctrl.SetInsertionPoint(cursor_pos + len(generated_code))
 - Tested code insertion at various cursor positions within existing content
 - Validated keyboard navigation and focus management across all dialog elements
 - Confirmed proper integration with existing reply dialog functionality
+
+21. **Context Menu Implementation and Improvements (2025-10-04)**
+    - Implemented comprehensive context menu functionality for thread lists using Application Key and right-click
+    - Added F5 refresh functionality with proper focus restoration to first item after refresh
+    - Enhanced copy functionality with direct display text extraction and system clipboard API
+    - Fixed critical usability issues affecting refresh behavior, copy operations, and clipboard persistence
+
+### Key Technical Improvements (Context Menu and Fixes)
+
+**Context Menu Implementation:**
+- **Menu Structure**: Implemented 4-item context menu with refresh, web open, copy title, copy URL functions
+- **Event Handling**: Added EVT_CONTEXT_MENU binding to DataViewListCtrl for proper menu display
+- **Keyboard Shortcuts**: Added global accelerator table entries for F5 (refresh), Ctrl+W (web), Ctrl+C (title), Ctrl+D (URL)
+- **Menu Display Logic**: Context menu only appears on valid thread items, not pagination controls
+
+**Focus Management Enhancement:**
+- **Refresh Focus**: Modified on_refresh method to save state and restore focus to first item after content reload
+- **Content-Type Specific Handling**: Implemented tailored refresh logic for each content type (thread_list, thread_detail, home_content, user_threads, user_posts, message_list, message_detail, search_result)
+- **Asynchronous Focus Restoration**: Used wx.CallAfter for reliable focus positioning after list updates
+- **State Preservation**: Enhanced saved_list_index mechanism for consistent focus behavior across all operations
+
+**Copy Functionality Overhaul:**
+- **Direct Text Extraction**: Changed from complex data processing to direct GetTextValue() from list display
+- **System Clipboard API**: Implemented cross-platform system clipboard usage (Windows clip, macOS pbcopy, Linux xclip/xsel)
+- **Text Cleaning**: Added intelligent removal of list numbering information (e.g., "，1之24项")
+- **Persistence**: Fixed clipboard content being cleared when application exits by using system-level clipboard operations
+
+**URL Construction Enhancement:**
+- **Dynamic URL Building**: Created build_thread_url method for reliable forum URL construction
+- **Forum Configuration Integration**: Uses current forum configuration for proper base URL handling
+- **Fallback Support**: Provides default zhengdu forum URL when configuration is unavailable
+- **Error Handling**: Comprehensive exception handling for all URL construction scenarios
+
+### Implementation Details
+
+**Context Menu Structure:**
+```
+┌─────────────────────────┐
+│ 刷新    F5             │
+│ ─────────────────────── │
+│ 网页打开(W) Ctrl+W     │
+│ 拷贝帖子标题 Ctrl+C    │
+│ 拷贝帖子地址 Ctrl+D    │
+└─────────────────────────┘
+```
+
+**Accelerator Table Entries:**
+```python
+accelerator_table = [
+    wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F5, 1005),      # F5 - 刷新
+    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W'), 1006),         # Ctrl+W - 网页打开
+    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('C'), 1007),         # Ctrl+C - 拷贝标题
+    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('D'), 1008),         # Ctrl+D - 拷贝地址
+]
+```
+
+**System Clipboard Implementation:**
+```python
+def copy_to_clipboard(self, text):
+    # Windows: subprocess.run(['clip'], input=text.encode('gbk'), shell=True)
+    # macOS: subprocess.run(['pbcopy'], input=text.encode('utf-8'))
+    # Linux: subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode('utf-8'))
+```
+
+**Focus Restoration Logic:**
+```python
+def on_refresh(self, event):
+    # Save focus state
+    self.saved_list_index = 0  # Focus on first item after refresh
+
+    # Content-type specific refresh with focus restoration
+    if self.current_content_type == 'thread_list':
+        self.load_forum_section_with_type(...)
+    elif self.current_content_type == 'user_threads':
+        self.load_my_threads_and_restore_focus()
+    # ... other content types
+```
+
+### Key Features
+- **Universal Access**: Context menu accessible via Application Key, right-click, or keyboard shortcuts
+- **Consistent Behavior**: Refresh operations maintain focus positioning across all content types
+- **Reliable Copy Operations**: Direct text extraction eliminates HTML processing issues
+- **Cross-Platform Clipboard**: System clipboard API ensures content persistence after application exit
+- **Error Resilience**: Comprehensive exception handling prevents application crashes
+- **Accessibility Compliance**: All functions maintain screen reader compatibility and keyboard navigation
+
+### Testing Results
+- Verified context menu appears correctly on thread items and not on pagination controls
+- Confirmed F5 refresh functionality restores focus to first item in all content types
+- Tested copy operations with various thread titles and URL formats
+- Validated clipboard content persists after application exit
+- Confirmed keyboard shortcuts work without conflicts with existing functionality
+- Tested cross-platform clipboard operations on Windows, macOS, and Linux systems
+- Verified screen reader compatibility with all new context menu features
+
+### Bug Fixes Addressed
+1. **Refresh Focus Issue**: Fixed refresh operation losing focus - now restores to first item
+2. **Copy Title Not Working**: Fixed copy functionality by switching to direct display text extraction
+3. **Clipboard Clear on Exit**: Fixed clipboard persistence by implementing system clipboard API
+4. **HTML Processing Problems**: Eliminated HTML tag cleaning issues by using pre-processed display text
+5. **Data Structure Dependencies**: Reduced reliance on internal data structures for improved reliability
