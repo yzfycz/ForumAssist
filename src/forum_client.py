@@ -5,8 +5,11 @@
 """
 
 import requests
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.api_config import API_ENDPOINTS, ORDERBY_OPTIONS
-from utils.html_parser import HTMLParser
+from src.utils.html_parser import HTMLParser
 
 class ForumClient:
     """论坛客户端"""
@@ -215,7 +218,7 @@ class ForumClient:
 
         return {"threadlist": [], "pagination": {}}
 
-    def get_thread_detail(self, forum_name, tid, page=1):
+    def get_thread_detail(self, forum_name, tid, page=1, uid=None):
         """
         获取帖子详情
 
@@ -223,6 +226,7 @@ class ForumClient:
             forum_name: 论坛名称
             tid: 帖子ID
             page: 页码
+            uid: 用户ID（可选，用于筛选特定用户的回复）
 
         Returns:
             dict: 包含帖子详情和分页信息的字典
@@ -248,6 +252,10 @@ class ForumClient:
                 "appkey": "24b22d1468",
                 "seckey": "cb433ea43a"
             }
+
+            # 如果指定了uid，添加筛选参数
+            if uid:
+                params['uid'] = uid
             # 尝试添加auth参数（如果有的话）
             user_info = self.auth_manager.get_user_info(forum_name)
             if user_info:
@@ -315,7 +323,6 @@ class ForumClient:
                 if result.get('status') == 1:
                     # 用户帖子数据在 message 中，不是 data 中
                     message = result.get('message', {})
-                    # 分页信息直接在message中，不是在pagination中
                     return {
                         "threadlist": message.get('threadlist', []),
                         "pagination": {
@@ -367,7 +374,6 @@ class ForumClient:
                 if result.get('status') == 1:
                     # 用户回复数据在 message 中，不是 data 中
                     message = result.get('message', {})
-                    # 分页信息直接在message中，不是在pagination中
                     return {
                         "threadlist": message.get('threadlist', []),
                         "pagination": {
@@ -432,14 +438,16 @@ class ForumClient:
 
         return {"threadlist": [], "pagination": {}}
 
-    def post_reply(self, forum_name, tid, content):
+    def post_reply(self, forum_name, fid, tid, content, pid=None):
         """
         发表回复
 
         Args:
             forum_name: 论坛名称
+            fid: 板块ID
             tid: 帖子ID
             content: 回复内容
+            pid: 帖子ID（可选，用于回复特定楼层）
 
         Returns:
             bool: 是否发表成功
@@ -460,9 +468,14 @@ class ForumClient:
             post_url = f"{forum_url.rstrip('/')}/{API_ENDPOINTS['post_reply']}"
             data = {
                 "format": "json",
+                "fid": fid,
                 "tid": tid,
                 "message": content
             }
+
+            # 如果指定了pid，添加回复特定楼层的参数
+            if pid:
+                data['pid'] = pid
 
             response = session.post(post_url, data=data)
             if response.status_code == 200:
@@ -588,3 +601,117 @@ class ForumClient:
             pass
 
         return False
+
+    def get_user_profile(self, forum_name, uid):
+        """
+        获取用户个人资料
+        Args:
+            forum_name: 论坛名称
+            uid: 用户ID
+        Returns:
+            dict: 用户资料数据
+        """
+        session = self.auth_manager.get_session(forum_name)
+        if not session:
+            return {}
+
+        forum_config = self.auth_manager.get_user_info(forum_name)
+        if not forum_config:
+            return {}
+
+        try:
+            forum_url = forum_config.get('url', '')
+            if not forum_url:
+                return {}
+
+            # 构造请求参数
+            params = {
+                'format': 'json',
+                'appkey': '24b22d1468',
+                'seckey': 'cb433ea43a',
+                'uid': uid
+            }
+
+            # 发送请求
+            profile_url = f"{forum_url.rstrip('/')}/user-index.htm"
+            response = session.get(profile_url, params=params, timeout=10)
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('status') == 1:
+                    return result.get('message', {})
+                else:
+                    raise Exception(result.get('message', '获取用户资料失败'))
+            else:
+                raise Exception(f"HTTP错误: {response.status_code}")
+
+        except Exception as e:
+            raise Exception(f"获取用户资料失败: {str(e)}")
+
+    def update_post(self, forum_name, edit_params):
+        """
+        编辑帖子
+        Args:
+            forum_name: 论坛名称
+            edit_params: 编辑参数 {
+                'fid': 板块ID,
+                'pid': 帖子ID,
+                'subject': 标题（可选，编辑楼主时需要）,
+                'message': 内容,
+                'typeid1': 分类ID1（可选）,
+                'typeid2': 分类ID2（可选）,
+                'typeid3': 分类ID3（可选）,
+                'typeid4': 分类ID4（可选）
+            }
+        Returns:
+            bool: 是否成功
+        """
+        session = self.auth_manager.get_session(forum_name)
+        if not session:
+            return False
+
+        forum_config = self.auth_manager.get_user_info(forum_name)
+        if not forum_config:
+            return False
+
+        try:
+            forum_url = forum_config.get('url', '')
+            if not forum_url:
+                return False
+
+            # 构造请求参数
+            params = {
+                'format': 'json',
+                'appkey': '24b22d1468',
+                'seckey': 'cb433ea43a',
+                'auth': self.auth_manager.get_auth(forum_name)
+            }
+
+            # 添加编辑参数（必须参数）
+            params['fid'] = edit_params.get('fid')
+            params['pid'] = edit_params.get('pid')
+            params['message'] = edit_params.get('message', '')
+
+            # 如果是编辑楼主，添加标题和分类信息
+            if edit_params.get('subject'):
+                params['subject'] = edit_params['subject']
+                # 添加分类信息（如果有）
+                for type_id in ['typeid1', 'typeid2', 'typeid3', 'typeid4']:
+                    if edit_params.get(type_id):
+                        params[type_id] = edit_params[type_id]
+
+            # 发送编辑请求
+            update_url = f"{forum_url.rstrip('/')}/post-update.htm"
+            response = session.post(update_url, data=params, timeout=10)
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('status') == 1:
+                    return True
+                else:
+                    raise Exception(result.get('message', '编辑失败'))
+            else:
+                raise Exception(f"HTTP错误: {response.status_code}")
+
+        except Exception as e:
+            raise Exception(f"编辑帖子失败: {str(e)}")

@@ -5,8 +5,10 @@
 """
 
 import os
+import sys
 import configparser
-from utils.crypto import CryptoManager
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.utils.crypto import CryptoManager
 
 class ConfigManager:
     """配置文件管理器"""

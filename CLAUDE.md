@@ -816,3 +816,95 @@ def on_refresh(self, event):
 3. **Clipboard Clear on Exit**: Fixed clipboard persistence by implementing system clipboard API
 4. **HTML Processing Problems**: Eliminated HTML tag cleaning issues by using pre-processed display text
 5. **Data Structure Dependencies**: Reduced reliance on internal data structures for improved reliability
+
+22. **User Content Pagination and Focus Fixes (2025-10-07)**
+    - Fixed critical user content pagination issue where "用户的发表" and "用户的回复" showed wrong page counts (33 pages instead of 65)
+    - Corrected content_type setting in user content loading methods to maintain proper pagination context
+    - Enhanced focus management for user content views to automatically focus on first item
+    - Implemented proper title restoration when exiting user content views
+    - Removed all debug output for cleaner user experience
+    - Eliminated intrusive notification dialogs when entering user content views
+
+### Key Technical Improvements (User Content Fixes)
+
+**Pagination Content Type Fix:**
+- **Root Cause**: `load_user_threads_and_restore_focus` and `load_user_posts_and_restore_focus` methods were calling `display_threads` without explicit content_type parameter
+- **Solution**: Added explicit content_type parameters ('user_threads' and 'user_posts') to maintain proper pagination context
+- **Impact**: Fixed page count display from incorrect 33 pages to correct 65 pages for user posts
+
+**Focus Management Enhancement:**
+- **Auto-Focus**: Added `wx.CallAfter(self.reset_keyboard_cursor, 0)` to both user content methods
+- **Consistency**: User content views now behave consistently with main thread list views
+- **Accessibility**: Maintains screen reader compatibility with automatic focus positioning
+
+**Title Restoration:**
+- **Exit Handling**: Enhanced `exit_user_content_mode` method to restore default title format when no previous state exists
+- **Default Format**: Restores to "{forum_name}-<{nickname}>-论坛助手" format
+- **Consistency**: Maintains consistent window title behavior across all navigation scenarios
+
+**Debug Cleanup:**
+- **Comprehensive Removal**: Removed all DEBUG print statements from event handlers, pagination methods, and context menu handlers
+- **User Experience**: Cleaner console output and improved application performance
+- **Production Ready**: Code is now suitable for production deployment without debug noise
+
+**Notification Removal:**
+- **Dialog Elimination**: Removed intrusive "正在查看 {username} 的主题/回复帖子，按退格键返回" notification dialogs
+- **Non-Intrusive Feedback**: Window title changes provide sufficient context without blocking dialogs
+- **User Experience**: Smoother navigation without disruptive popup notifications
+
+### Implementation Details
+
+**Fixed Method Calls:**
+```python
+# Before (problematic):
+self.display_threads(threadlist, pagination)
+
+# After (fixed):
+self.display_threads(threadlist, pagination, 'user_threads')
+self.display_threads(formatted_threads, pagination, 'user_posts')
+```
+
+**Focus Management Addition:**
+```python
+# Added to both user content methods:
+wx.CallAfter(self.reset_keyboard_cursor, 0)
+```
+
+**Title Restoration Logic:**
+```python
+def exit_user_content_mode(self):
+    # ... existing logic ...
+    else:
+        # If no previous thread detail state, restore to default title
+        self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
+```
+
+**Debug Output Removal:**
+- Removed all `print(f"DEBUG: ...")` statements from:
+  - `on_list_activated` method
+  - `on_list_context_menu` method
+  - `on_thread_list_context_menu` method
+  - `handle_row_activation` method
+  - `load_next_page` method
+  - All user content pagination handling
+
+**Notification Dialog Removal:**
+- Removed `self.show_info_message(f"正在查看 {username} 的主题帖子，按退格键返回")`
+- Removed `self.show_info_message(f"正在查看 {username} 的回复帖子，按退格键返回")`
+
+### Key Features
+- **Correct Pagination**: User content now displays correct page counts (65 pages instead of 33)
+- **Automatic Focus**: User content views automatically focus on first item for immediate keyboard navigation
+- **Clean Exit**: Exiting user content restores proper window title without manual intervention
+- **Debug-Free**: No debug output干扰用户体验
+- **Non-Intrusive**: No blocking notification dialogs when entering user content views
+- **Consistent Behavior**: All user content interactions follow established UI patterns
+
+### Testing Results
+- Verified user content pagination shows correct page counts (65 pages for user posts)
+- Confirmed automatic focus positioning works correctly in user content views
+- Tested title restoration when exiting user content views via backspace key
+- Validated absence of debug output in all user interactions
+- Confirmed notification dialogs no longer appear when entering user content
+- Verified keyboard navigation and screen reader compatibility maintained
+- Tested pagination controls work correctly with fixed content_type context

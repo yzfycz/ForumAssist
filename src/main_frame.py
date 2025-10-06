@@ -311,9 +311,10 @@ class MainFrame(wx.Frame):
         self.list_data = []  # 存储每行的数据信息
         self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, self.on_list_selection)
         self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.on_list_activated)
+        self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_ITEM_CONTEXT_MENU, self.on_list_context_menu)
+        self.list_ctrl.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
         self.list_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_list_key_down)
         self.list_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_list_focus)
-        self.list_ctrl.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
 
         list_sizer.Add(self.list_ctrl, 1, wx.ALL | wx.EXPAND, 5)
         self.list_panel.SetSizer(list_sizer)
@@ -678,9 +679,19 @@ class MainFrame(wx.Frame):
         """列表键盘事件处理"""
         keycode = event.GetKeyCode()
 
+        # 检查修饰键状态
+        ctrl_down = event.ControlDown()
+        shift_down = event.ShiftDown()
+
         if keycode == wx.WXK_BACK:
-            # 退格键：在帖子详情时返回之前的列表
-            if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+            # 退格键：优先处理筛选模式退出，然后是正常的返回逻辑
+            if hasattr(self, 'filter_mode') and self.filter_mode:
+                # 退出筛选模式
+                self.exit_filter_mode()
+            elif hasattr(self, 'user_content_mode') and self.user_content_mode:
+                # 退出用户内容查看模式，返回之前的帖子详情
+                self.exit_user_content_mode()
+            elif hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
                 self.go_back_to_previous_list()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'message_detail':
                 # 在消息详情时返回消息列表
@@ -688,11 +699,62 @@ class MainFrame(wx.Frame):
             else:
                 event.Skip()
         elif keycode == wx.WXK_RETURN:
-            # 回车键：激活当前选中项
-            selected = self.list_ctrl.GetSelectedRow()
-            if selected != -1:
-                # 直接调用激活逻辑，不需要创建复杂的事件对象
-                self.handle_row_activation(selected)
+            if ctrl_down:
+                # Ctrl+回车：回复此楼（仅在帖子详情页面）
+                if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                    selected = self.list_ctrl.GetSelectedRow()
+                    if selected != -1 and selected < len(self.list_data):
+                        self.handle_reply_to_floor(selected)
+                    else:
+                        event.Skip()
+                else:
+                    event.Skip()
+            elif shift_down:
+                # Shift+回车：查看用户资料（仅在帖子详情页面）
+                if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                    selected = self.list_ctrl.GetSelectedRow()
+                    if selected != -1 and selected < len(self.list_data):
+                        self.handle_view_user_profile(selected)
+                    else:
+                        event.Skip()
+                else:
+                    event.Skip()
+            else:
+                # 普通回车键：激活当前选中项
+                selected = self.list_ctrl.GetSelectedRow()
+                if selected != -1:
+                    # 直接调用激活逻辑，不需要创建复杂的事件对象
+                    self.handle_row_activation(selected)
+                else:
+                    event.Skip()
+        elif keycode == ord('K') or keycode == ord('k'):
+            # K键：只看他功能（仅在帖子详情页面）
+            if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                selected = self.list_ctrl.GetSelectedRow()
+                if selected != -1 and selected < len(self.list_data):
+                    self.handle_filter_by_user(selected)
+                else:
+                    event.Skip()
+            else:
+                event.Skip()
+        elif keycode == ord('T') or keycode == ord('t'):
+            # T键：用户内容二级菜单（仅在帖子详情页面）
+            if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                selected = self.list_ctrl.GetSelectedRow()
+                if selected != -1 and selected < len(self.list_data):
+                    self.handle_user_content_menu(selected)
+                else:
+                    event.Skip()
+            else:
+                event.Skip()
+        elif keycode == ord('E') and ctrl_down:
+            # Ctrl+E：编辑帖子（仅在帖子详情页面）
+            if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                selected = self.list_ctrl.GetSelectedRow()
+                if selected != -1 and selected < len(self.list_data):
+                    self.handle_edit_post(selected)
+                else:
+                    event.Skip()
             else:
                 event.Skip()
         else:
@@ -773,25 +835,9 @@ class MainFrame(wx.Frame):
             if uid:
                 self.current_uid = uid
                 result = self.forum_client.get_user_threads(self.current_forum, uid)
-                # API返回的是threadlist格式，每个item本身就是thread对象
-                threadlist = result.get('threadlist', [])
-                formatted_threads = []
-                for item in threadlist:
-                    if item:
-                        formatted_thread = {
-                            'tid': item.get('tid'),
-                            'subject': item.get('subject', ''),
-                            'username': item.get('username', ''),
-                            'uid': item.get('uid'),
-                            'dateline_fmt': item.get('dateline_fmt', ''),
-                            'views': item.get('views', 0),
-                            'posts': item.get('posts', 0),
-                            'forumname': item.get('forumname', '')
-                        }
-                        formatted_threads.append(formatted_thread)
-
                 self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
-                self.display_threads_and_restore_focus(formatted_threads, result.get('pagination', {}), 'user_threads')
+                self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'user_threads')
+                self.current_orderby = 'latest'
 
     def load_my_posts_and_restore_focus(self):
         """加载我的回复并恢复焦点"""
@@ -801,9 +847,9 @@ class MainFrame(wx.Frame):
             if uid:
                 self.current_uid = uid
                 result = self.forum_client.get_user_posts(self.current_forum, uid)
-                # API返回的是threadlist格式，每个项目包含thread和post信息
-                # 需要转换为display_threads期望的格式，显示为回复列表
+                # 使用原始数据结构，包含threadlist和pagination
                 threadlist = result.get('threadlist', [])
+                # 需要转换为display_threads期望的格式，显示为回复列表
                 formatted_threads = []
                 for item in threadlist:
                     thread_info = item.get('thread', {})
@@ -1157,7 +1203,7 @@ class MainFrame(wx.Frame):
         """列表激活事件 - 处理分页控制和帖子详情加载"""
         try:
             selected_row = self.list_ctrl.GetSelectedRow()
-            if selected_row != -1:
+            if selected_row != -1 and selected_row < len(self.list_data):
                 self.handle_row_activation(selected_row)
         except Exception as e:
             pass
@@ -1171,8 +1217,139 @@ class MainFrame(wx.Frame):
             if selected_row == -1 or selected_row >= len(self.list_data):
                 return
 
-            # 检查选中项的数据，只在有效的帖子项上显示菜单
             item_data = self.list_data[selected_row]
+
+            # 检查内容类型，调用相应的菜单处理方法
+            if hasattr(self, 'current_content_type'):
+                if self.current_content_type == 'thread_detail':
+                    # 帖子详情页面的上下文菜单
+                    self.on_thread_detail_context_menu(event, selected_row, item_data)
+                    return
+                elif self.current_content_type in ['user_threads', 'user_posts']:
+                    # 用户内容页面的上下文菜单
+                    self.on_user_content_context_menu(event, selected_row, item_data)
+                    return
+
+            # 默认的帖子列表上下文菜单
+            self.on_thread_list_context_menu(event, selected_row, item_data)
+
+        except Exception as e:
+            pass
+
+    def on_thread_detail_context_menu(self, event, selected_row, item_data):
+        """帖子详情页面的上下文菜单"""
+        try:
+            # 只在帖子项上显示菜单
+            if item_data.get('type') != 'post':
+                return
+
+            # 获取帖子数据 - 处理正常模式和筛选模式的不同数据结构
+            if 'post_data' in item_data:
+                # 正常模式
+                post_data = item_data.get('post_data', {})
+            else:
+                # 筛选模式
+                post_data = item_data.get('data', {})
+
+            uid = post_data.get('uid') or post_data.get('authorid')  # 根据调试信息，使用uid字段
+            pid = post_data.get('pid')  # 使用正确的字段名称
+            username = post_data.get('username') or post_data.get('author', '用户')  # 根据调试信息，使用username字段
+
+            if not uid:
+                return
+
+            # 判断是否可以编辑（只能编辑自己的帖子）
+            can_edit = self.should_show_edit_menu(post_data)
+            is_thread_author = self.is_thread_author(post_data)
+
+            # 创建菜单
+            menu = wx.Menu()
+
+            # 基础功能
+            refresh_item = menu.Append(wx.ID_ANY, "刷新\tF5")
+            menu.AppendSeparator()
+
+            # 检查是否处于筛选模式
+            is_filter_mode = hasattr(self, 'filter_mode') and self.filter_mode
+            filter_username = self.filter_mode.get('username') if is_filter_mode else None
+
+            if is_filter_mode:
+                # 筛选模式下的菜单
+                tip_item = menu.Append(wx.ID_ANY, f"筛选模式：只看{filter_username}")
+                tip_item.Enable(False)  # 禁用，仅作提示
+                menu.AppendSeparator()
+                reply_item = menu.Append(wx.ID_ANY, f"回复{username}\tCtrl+回车")
+                profile_item = menu.Append(wx.ID_ANY, f"查看{username}的资料\tShift+回车")
+
+                # 筛选模式下如果可以编辑仍显示编辑功能
+                if can_edit:
+                    if is_thread_author:
+                        edit_item = menu.Append(wx.ID_ANY, f"编辑帖子\tCtrl+E")
+                    else:
+                        edit_item = menu.Append(wx.ID_ANY, f"编辑回复\tCtrl+E")
+                    menu.AppendSeparator()
+                else:
+                    menu.AppendSeparator()
+            else:
+                # 正常模式下的完整功能
+                reply_item = menu.Append(wx.ID_ANY, f"回复{username}\tCtrl+回车")
+                profile_item = menu.Append(wx.ID_ANY, f"查看{username}的资料\tShift+回车")
+
+                # 只有自己的帖子才显示编辑功能
+                if can_edit:
+                    menu.AppendSeparator()
+                    if is_thread_author:
+                        edit_item = menu.Append(wx.ID_ANY, f"编辑帖子\tCtrl+E")
+                    else:
+                        edit_item = menu.Append(wx.ID_ANY, f"编辑回复\tCtrl+E")
+
+                menu.AppendSeparator()
+                filter_item = menu.Append(wx.ID_ANY, f"只看{username}(K)")
+
+                # 用户内容的二级菜单
+                user_content_menu = wx.Menu()
+                threads_item = user_content_menu.Append(wx.ID_ANY, f"{username}的发布")
+                posts_item = user_content_menu.Append(wx.ID_ANY, f"{username}的回复")
+                menu.AppendSubMenu(user_content_menu, f"{username}的全部帖子(T)")
+
+            # 事件绑定
+            self.Bind(wx.EVT_MENU, lambda e: self.on_refresh_thread_detail(), refresh_item)
+            self.Bind(wx.EVT_MENU, lambda e: self.on_reply_to_floor(post_data), reply_item)
+            self.Bind(wx.EVT_MENU, lambda e: self.on_view_user_profile(uid, username), profile_item)
+
+            if can_edit:
+                self.Bind(wx.EVT_MENU, lambda e: self.on_edit_post(post_data), edit_item)
+
+            if not is_filter_mode:
+                self.Bind(wx.EVT_MENU, lambda e: self.on_filter_posts_by_user(username, uid), filter_item)
+                # 绑定二级菜单事件
+                self.Bind(wx.EVT_MENU, lambda e: self.on_view_user_threads(username, uid), threads_item)
+                self.Bind(wx.EVT_MENU, lambda e: self.on_view_user_posts(username, uid), posts_item)
+
+            # 显示菜单 - 处理位置问题
+            mouse_pos = wx.GetMousePosition()
+            screen_pos = self.list_ctrl.ScreenToClient(mouse_pos)
+
+            # 如果客户端坐标为负数，使用默认位置
+            if screen_pos.x < 0 or screen_pos.y < 0:
+                # 使用简单计算的位置
+                row_height = 20  # 估计的行高
+                popup_pos = wx.Point(10, selected_row * row_height + 10)
+            else:
+                popup_pos = screen_pos
+
+            # 显示菜单
+            self.list_ctrl.PopupMenu(menu, popup_pos)
+            menu.Destroy()
+
+        except Exception as e:
+            # 静默处理异常
+            pass
+
+    def on_thread_list_context_menu(self, event, selected_row, item_data):
+        """帖子列表页面的上下文菜单（保持原有功能）"""
+        try:
+            # 检查选中项的数据，只在有效的帖子项上显示菜单
             if item_data.get('type') == 'pagination':
                 return
 
@@ -1197,7 +1374,14 @@ class MainFrame(wx.Frame):
             menu.Destroy()
 
         except Exception as e:
-            # 静默处理异常，避免影响用户体验
+            pass
+
+    def on_user_content_context_menu(self, event, selected_row, item_data):
+        """用户内容页面的上下文菜单"""
+        try:
+            # 暂时保持简单，可以后续扩展
+            self.on_thread_list_context_menu(event, selected_row, item_data)
+        except Exception as e:
             pass
 
     def handle_row_activation(self, selected_row):
@@ -1608,13 +1792,10 @@ class MainFrame(wx.Frame):
             if uid:
                 self.current_uid = uid
                 result = self.forum_client.get_user_threads(self.current_forum, uid)
-                # API返回的是threadlist格式，每个item本身就是thread对象
                 threadlist = result.get('threadlist', [])
-                # 直接使用item作为thread对象
                 formatted_threads = []
                 for item in threadlist:
                     if item:
-                        # 构造display_threads期望的格式
                         formatted_thread = {
                             'tid': item.get('tid'),
                             'subject': item.get('subject', ''),
@@ -1636,26 +1817,23 @@ class MainFrame(wx.Frame):
             if uid:
                 self.current_uid = uid
                 result = self.forum_client.get_user_posts(self.current_forum, uid)
-                # API返回的是threadlist格式，每个项目包含thread和post信息
-                # 需要转换为display_threads期望的格式，显示为回复列表
                 threadlist = result.get('threadlist', [])
                 formatted_threads = []
                 for item in threadlist:
                     thread_info = item.get('thread', {})
                     post_info = item.get('post', {})
                     if thread_info and post_info:
-                        # 构造显示为回复的格式，按照新的显示格式要求
                         formatted_thread = {
                             'tid': thread_info.get('tid'),
                             'subject': thread_info.get('subject', ''),
                             'username': thread_info.get('username', ''),
                             'uid': thread_info.get('uid'),
-                            'dateline_fmt': thread_info.get('dateline_fmt', ''),  # 帖子发表时间
+                            'dateline_fmt': thread_info.get('dateline_fmt', ''),
                             'views': thread_info.get('views', 0),
                             'posts': thread_info.get('posts', 0),
                             'forumname': item.get('forumname', ''),
-                            'lastpost_fmt': post_info.get('dateline_fmt', ''),  # 回复时间作为最后回复时间
-                            'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')  # 优先使用回复者，否则使用帖子最后回复者
+                            'lastpost_fmt': post_info.get('dateline_fmt', ''),
+                            'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')
                         }
                         formatted_threads.append(formatted_thread)
 
@@ -2167,12 +2345,23 @@ class MainFrame(wx.Frame):
                 wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
                 # 添加帖子详情的分页支持
-                result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, next_page)
-                self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
-                # 设置键盘游标到第一项（楼主）
+                if hasattr(self, 'filter_mode') and self.filter_mode:
+                    # 在筛选模式下，使用API筛选
+                    filter_uid = self.filter_mode.get('uid')
+                    result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, next_page, uid=filter_uid)
+                    self.display_filtered_posts(result.get('postlist', []), result.get('thread_info', {}), result.get('pagination', {}))
+                else:
+                    # 正常模式
+                    result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, next_page)
+                    self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
+
+                # 设置键盘游标到第一项
                 wx.CallAfter(self.reset_keyboard_cursor, 0)
 
         except Exception as e:
+            import traceback
+            error_detail = f"加载下一页失败: {str(e)}\n{traceback.format_exc()}"
+            print(error_detail)  # 控制台输出详细错误
             wx.MessageBox("加载下一页失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def clean_html_tags(self, html_content):
@@ -2498,12 +2687,23 @@ class MainFrame(wx.Frame):
                 # 设置键盘游标到第一项
                 wx.CallAfter(self.reset_keyboard_cursor, 0)
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
-                result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, prev_page)
-                self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
-                # 设置键盘游标到第一项（楼主）
+                if hasattr(self, 'filter_mode') and self.filter_mode:
+                    # 在筛选模式下，使用API筛选
+                    filter_uid = self.filter_mode.get('uid')
+                    result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, prev_page, uid=filter_uid)
+                    self.display_filtered_posts(result.get('postlist', []), result.get('thread_info', {}), result.get('pagination', {}))
+                else:
+                    # 正常模式
+                    result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, prev_page)
+                    self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
+
+                # 设置键盘游标到第一项
                 wx.CallAfter(self.reset_keyboard_cursor, 0)
 
         except Exception as e:
+            import traceback
+            error_detail = f"加载上一页失败: {str(e)}\n{traceback.format_exc()}"
+            print(error_detail)  # 控制台输出详细错误
             wx.MessageBox("加载上一页失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def show_page_jump_dialog(self):
@@ -2656,8 +2856,15 @@ class MainFrame(wx.Frame):
                 result = self.forum_client.get_home_content(self.current_forum, self.current_orderby, target_page)
                 self.display_threads(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
             elif self.current_content_type == 'thread_detail' and hasattr(self, 'current_tid'):
-                result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, target_page)
-                self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
+                if hasattr(self, 'filter_mode') and self.filter_mode:
+                    # 在筛选模式下，使用API筛选
+                    filter_uid = self.filter_mode.get('uid')
+                    result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, target_page, uid=filter_uid)
+                    self.display_filtered_posts(result.get('postlist', []), result.get('thread_info', {}), result.get('pagination', {}))
+                else:
+                    # 正常模式
+                    result = self.forum_client.get_thread_detail(self.current_forum, self.current_tid, target_page)
+                    self.display_posts(result.get('postlist', []), result.get('pagination', {}), result.get('thread_info', {}))
 
             # 页面跳转成功后，将焦点移动到列表第一项
             if self.list_ctrl.GetItemCount() > 0:
@@ -2665,6 +2872,9 @@ class MainFrame(wx.Frame):
                 wx.CallAfter(self.move_focus_to_first_item)
 
         except Exception as e:
+            import traceback
+            error_detail = f"页面跳转失败: {str(e)}\n{traceback.format_exc()}"
+            print(error_detail)  # 控制台输出详细错误
             wx.MessageBox("页面跳转失败", "错误", wx.OK | wx.ICON_ERROR)
 
     def move_focus_to_first_item(self):
@@ -3363,3 +3573,1055 @@ class MainFrame(wx.Frame):
         """析构函数"""
         # 登出所有论坛
         self.auth_manager.logout_all()
+
+    # =========================================================================
+    # 帖子详情右键菜单增强功能的辅助方法
+    # =========================================================================
+
+    def should_show_edit_menu(self, post_data):
+        """判断是否应该显示编辑菜单"""
+        try:
+            # 检查是否登录
+            if not self.auth_manager.is_logged_in():
+                return False
+
+            # 获取当前登录用户ID
+            current_user_id = self.auth_manager.get_current_user_id()
+            if not current_user_id:
+                return False
+
+            # 获取帖子作者ID - 兼容不同字段名称
+            post_user_id = post_data.get('uid') or post_data.get('authorid') or post_data.get('author_id')
+            if not post_user_id:
+                return False
+
+            # 判断是否是自己的帖子
+            return str(current_user_id) == str(post_user_id)
+
+        except Exception:
+            return False
+
+    def is_thread_author(self, post_data):
+        """判断是否是楼主"""
+        try:
+            # 楼主的floor通常为1，或者检查是否是帖子的第一个回复
+            floor = post_data.get('floor', 0)
+            return floor == 1
+        except Exception:
+            return False
+
+    def on_refresh_thread_detail(self):
+        """刷新帖子详情"""
+        try:
+            if hasattr(self, 'current_tid') and self.current_tid:
+                # 重新加载帖子详情
+                if hasattr(self, 'current_thread_info') and self.current_thread_info:
+                    tid = self.current_thread_info.get('tid')
+                    if tid:
+                        # 如果处于筛选模式，保持筛选状态
+                        if hasattr(self, 'filter_mode') and self.filter_mode:
+                            filter_uid = self.filter_mode.get('uid')
+                            if filter_uid:
+                                self.load_thread_detail_with_filter(tid, filter_uid)
+                        else:
+                            self.load_thread_detail(tid)
+
+                # 恢复焦点到第一项
+                wx.CallAfter(self.reset_keyboard_cursor, 0)
+        except Exception as e:
+            wx.MessageBox("刷新失败", "错误", wx.OK | wx.ICON_ERROR)
+
+    def on_reply_to_floor(self, post_data):
+        """回复特定楼层"""
+        try:
+            # 获取当前帖子的必要信息
+            pid = post_data.get('pid')
+            username = post_data.get('author', post_data.get('username', '用户'))
+            if not hasattr(self, 'current_thread_info') or not self.current_thread_info:
+                wx.MessageBox("无法获取帖子信息", "错误", wx.OK | wx.ICON_ERROR)
+                return
+
+            fid = self.current_thread_info.get('fid')
+            tid = self.current_thread_info.get('tid')
+
+            if not fid or not tid:
+                wx.MessageBox("无法获取帖子信息", "错误", wx.OK | wx.ICON_ERROR)
+                return
+
+            # 设置回复目标
+            self.reply_target = {
+                'fid': fid,
+                'tid': tid,
+                'pid': pid,
+                'username': username
+            }
+
+            # 显示回复对话框，预填充引用内容
+            self.show_reply_dialog_with_quote(username)
+
+        except Exception as e:
+            wx.MessageBox(f"设置回复目标失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+
+    def show_reply_dialog_with_quote(self, username):
+        """显示带引用的回复对话框"""
+        try:
+            # 防止重复打开对话框
+            if hasattr(self, '_reply_dialog_open') and self._reply_dialog_open:
+                return
+
+            if not hasattr(self, 'reply_target') or not self.reply_target:
+                wx.MessageBox("请先选择要回复的楼层", "提示", wx.OK | wx.ICON_INFORMATION)
+                return
+
+            # 标记对话框为打开状态
+            self._reply_dialog_open = True
+
+            # 创建回复对话框
+            dialog = wx.Dialog(self, title=f"回复{username}", size=(500, 350))
+            dialog.SetExtraStyle(wx.WS_EX_CONTEXTHELP)
+
+            panel = wx.Panel(dialog)
+            sizer = wx.BoxSizer(wx.VERTICAL)
+
+            # 回复对象信息（只读）
+            target_label = wx.StaticText(panel, label=f"回复对象: {username}")
+            sizer.Add(target_label, 0, wx.ALL | wx.EXPAND, 5)
+
+            # 引用内容预填充（只读）
+            quote_text = f"引用 {username} 的回复："
+            quote_ctrl = wx.TextCtrl(panel, value=quote_text, style=wx.TE_READONLY)
+            sizer.Add(quote_ctrl, 0, wx.ALL | wx.EXPAND, 5)
+
+            # 内容输入框
+            content_label = wx.StaticText(panel, label="回复内容:")
+            content_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_PROCESS_ENTER)
+            sizer.Add(content_label, 0, wx.ALL | wx.EXPAND, 5)
+            sizer.Add(content_ctrl, 1, wx.ALL | wx.EXPAND, 5)
+
+            # 按钮面板
+            button_panel = wx.Panel(panel)
+            button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            add_code_button = wx.Button(button_panel, label="添加代码(&J)")
+            ok_button = wx.Button(button_panel, id=wx.ID_OK, label="发送(&S)")
+            cancel_button = wx.Button(button_panel, id=wx.ID_CANCEL, label="取消(&C)")
+            button_sizer.Add(add_code_button, 0, wx.ALL, 5)
+            button_sizer.Add(ok_button, 0, wx.ALL, 5)
+            button_sizer.Add(cancel_button, 0, wx.ALL, 5)
+            button_panel.SetSizer(button_sizer)
+            sizer.Add(button_panel, 0, wx.ALL | wx.ALIGN_CENTER, 5)
+
+            panel.SetSizer(sizer)
+            # 将panel作为对话框的主sizer
+            dialog_sizer = wx.BoxSizer(wx.VERTICAL)
+            dialog_sizer.Add(panel, 1, wx.EXPAND)
+            dialog.SetSizerAndFit(dialog_sizer)
+
+            # 设置焦点到内容输入框
+            wx.CallAfter(content_ctrl.SetFocus)
+
+            # 绑定添加代码按钮事件
+            def on_add_code(event):
+                # 打开代码生成对话框
+                code_dialog = CodeGeneratorDialog(dialog)
+                result = code_dialog.ShowModal()
+
+                if result == wx.ID_OK and code_dialog.generated_code:
+                    # 将生成的代码插入到内容编辑框
+                    current_content = content_ctrl.GetValue()
+                    cursor_pos = content_ctrl.GetInsertionPoint()
+
+                    # 在光标位置插入代码
+                    new_content = current_content[:cursor_pos] + code_dialog.generated_code + current_content[cursor_pos:]
+                    content_ctrl.SetValue(new_content)
+
+                    # 将光标移动到插入代码的后面
+                    content_ctrl.SetInsertionPoint(cursor_pos + len(code_dialog.generated_code))
+                    content_ctrl.SetFocus()
+
+                code_dialog.Destroy()
+
+            # 绑定取消按钮事件以确保对话框正确关闭
+            def on_cancel(event):
+                dialog.EndModal(wx.ID_CANCEL)
+                event.Skip()
+
+            def on_dialog_close(event):
+                # 重置对话框打开状态
+                self._reply_dialog_open = False
+                event.Skip()
+
+            add_code_button.Bind(wx.EVT_BUTTON, on_add_code)
+            cancel_button.Bind(wx.EVT_BUTTON, on_cancel)
+            dialog.Bind(wx.EVT_CLOSE, on_dialog_close)
+
+            # 显示对话框
+            result = dialog.ShowModal()
+            # 重置对话框打开状态
+            self._reply_dialog_open = False
+
+            if result == wx.ID_OK:
+                content = content_ctrl.GetValue().strip()
+                if content:
+                    self.send_floor_reply(content)
+                else:
+                    wx.MessageBox("回复内容不能为空", "提示", wx.OK | wx.ICON_WARNING)
+
+            dialog.Destroy()
+
+        except Exception as e:
+            # 确保在异常情况下也重置状态
+            self._reply_dialog_open = False
+
+    def send_floor_reply(self, content):
+        """发送楼层回复"""
+        try:
+            if not hasattr(self, 'reply_target') or not self.reply_target:
+                wx.MessageBox("请先选择要回复的楼层", "提示", wx.OK | wx.ICON_INFORMATION)
+                return
+
+            reply_target = self.reply_target
+
+            # 准备回复内容
+            prepared_content = self.prepare_reply_content(content)
+
+            # 调用回复API（使用新的参数格式）
+            success = self.forum_client.post_reply(
+                self.current_forum,
+                reply_target['fid'],
+                reply_target['tid'],
+                prepared_content,
+                reply_target['pid']  # 关键：指定要回复的楼层
+            )
+
+            if success:
+                wx.MessageBox(f"回复{reply_target['username']}成功", "成功", wx.OK | wx.ICON_INFORMATION)
+                # 刷新当前页面
+                self.load_thread_detail(reply_target['tid'])
+            else:
+                wx.MessageBox("回复发送失败", "错误", wx.OK | wx.ICON_ERROR)
+
+        except Exception as e:
+            wx.MessageBox(f"回复发送失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+
+    def on_view_user_profile(self, uid, username):
+        """查看用户资料"""
+        try:
+            if not uid:
+                wx.MessageBox("无法获取用户ID", "错误", wx.OK | wx.ICON_ERROR)
+                return
+
+            # 调用API获取用户资料
+            profile_data = self.forum_client.get_user_profile(self.current_forum, uid)
+
+            # 显示用户资料对话框
+            self.show_user_profile_dialog(username, profile_data)
+
+        except Exception as e:
+            wx.MessageBox(f"获取{username}的资料失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+
+    def show_user_profile_dialog(self, username, profile_data):
+        """显示用户资料对话框 - 使用编辑框形式"""
+        try:
+            # 获取用户昵称，优先使用API返回的username，如果没有则使用传入的username
+            user_nickname = profile_data.get('username', username)
+            dialog = wx.Dialog(self, title=f"{user_nickname}的资料", size=(500, 600))
+
+            # 创建主布局
+            main_sizer = wx.BoxSizer(wx.VERTICAL)
+
+            # 创建资料编辑框
+            profile_text = wx.TextCtrl(
+                dialog,
+                style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP | wx.TE_RICH2
+            )
+
+            # 构建资料显示文本
+            profile_lines = []
+
+            # 资料字段映射 - 根据API实际返回的字段名进行调整
+            field_mapping = [
+                ('用户名', profile_data.get('username', '')),  # 用户昵称
+                ('争渡号', str(profile_data.get('uid', ''))),  # 用户ID
+                ('注册时间', profile_data.get('regdate_fmt', '')),  # 注册时间(格式化)
+                ('级别', profile_data.get('groupname', '')),  # 用户级别/组名
+                ('最后活跃', profile_data.get('lastactive_fmt', '')),  # 最后活跃时间
+                ('在线状态', '在线' if profile_data.get('isonline', 0) else '离线'),  # 在线状态
+                ('主题数', str(profile_data.get('threads', 0))),  # 发表的主题数
+                ('帖子数', str(profile_data.get('posts', 0))),  # 发表的帖子数
+                ('我的帖子', str(profile_data.get('myposts', 0))),  # 用户自己的帖子数
+                ('精华帖数', str(profile_data.get('digests', 0))),  # 精华帖数
+                ('关注数', str(profile_data.get('follows', 0))),  # 关注的人数
+                ('粉丝数', str(profile_data.get('followeds', 0))),  # 粉丝数
+                ('个人主页', profile_data.get('homepage', '')),  # 个人主页
+                ('在线时长', str(profile_data.get('onlinetime', 0))),  # 在线时长(秒)
+                ('个人签名', profile_data.get('sign', '')),  # 个人签名
+                ('签到次数', str(profile_data.get('attendancenum', 0))),  # 签到次数
+                ('成长值', str(profile_data.get('attendancecredits', 0))),  # 签到成长值
+                ('小黑点', str(profile_data.get('black_points', 0))),  # 小黑点数
+                ('头像', '有' if profile_data.get('avatar', 0) else '无'),  # 是否有头像
+                ('允许改名', '是' if profile_data.get('allowrename', 0) else '否'),  # 是否允许改名
+                ('在线认证', profile_data.get('online_auth_expiry_fmt', '')),  # 在线认证到期时间
+                ('关注状态', '已关注' if profile_data.get('followstatus', 0) else '未关注')  # 当前关注状态
+            ]
+
+            # 添加资料项到文本
+            for label, value in field_mapping:
+                # 基本空值检查 - 只过滤完全空的值
+                if value is None or value == '':
+                    continue
+
+                # 处理长文本
+                if label == '个人签名' and len(str(value)) > 50:
+                    display_value = str(value)[:47] + '...'
+                elif label == '在线时长':
+                    # 将秒数转换为小时
+                    try:
+                        hours = int(value) // 3600
+                        display_value = f"{hours}小时"
+                    except:
+                        display_value = str(value)
+                else:
+                    display_value = str(value)
+
+                # 添加到文本行
+                profile_lines.append(f"{label}: {display_value}")
+
+            # 如果没有有效数据，显示提示
+            if not profile_lines:
+                profile_lines.append("暂无可用资料")
+
+            # 设置编辑框内容
+            profile_text.SetValue('\n'.join(profile_lines))
+
+            # 添加编辑框到主布局
+            main_sizer.Add(profile_text, 1, wx.EXPAND | wx.ALL, 10)
+
+            # 添加分隔线
+            main_sizer.Add(wx.StaticLine(dialog), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+            # 创建按钮区域
+            button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # 添加关闭按钮
+            close_btn = wx.Button(dialog, label="关闭(&C)")
+            close_btn.Bind(wx.EVT_BUTTON, lambda e: dialog.Close())
+            button_sizer.Add(close_btn, 0, wx.ALL, 5)
+
+            main_sizer.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+
+            # 设置对话框的sizer
+            dialog.SetSizerAndFit(main_sizer)
+
+            # 绑定键盘事件到对话框
+            def on_dialog_key_down(event):
+                key_code = event.GetKeyCode()
+                if key_code == wx.WXK_ESCAPE or key_code == wx.WXK_BACK:
+                    dialog.Close()
+                    return
+                event.Skip()
+
+            dialog.Bind(wx.EVT_KEY_DOWN, on_dialog_key_down)
+
+            # 也绑定到编辑框作为备用
+            def on_text_key_down(event):
+                key_code = event.GetKeyCode()
+                if key_code == wx.WXK_ESCAPE or key_code == wx.WXK_BACK:
+                    dialog.Close()
+                    return
+                event.Skip()
+
+            profile_text.Bind(wx.EVT_KEY_DOWN, on_text_key_down)
+
+            # 居中显示并设置焦点
+            dialog.CenterOnParent()
+            profile_text.SetFocus()
+            dialog.ShowModal()
+            dialog.Destroy()
+
+        except Exception as e:
+            wx.MessageBox(f"显示用户资料失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+
+    def show_profile_details(self, profile_data):
+        """显示详细的用户资料（包含完整内容）"""
+        try:
+            dialog = wx.Dialog(self, title="详细资料", size=(450, 350))
+            main_sizer = wx.BoxSizer(wx.VERTICAL)
+
+            # 创建文本控件显示完整内容
+            text_ctrl = wx.TextCtrl(dialog, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
+
+            # 构建详细内容
+            details = []
+
+            # 基本资料
+            details.append(f"用户名: {username}")
+
+            if profile_data.get('uid'):
+                details.append(f"争渡号: {profile_data.get('uid')}")
+
+            if profile_data.get('group'):
+                details.append(f"级别: {profile_data.get('group')}")
+
+            if profile_data.get('regdate'):
+                details.append(f"注册时间: {profile_data.get('regdate')}")
+
+            if profile_data.get('lastactive'):
+                details.append(f"最后活跃: {profile_data.get('lastactive')}")
+
+            if profile_data.get('online'):
+                details.append(f"在线状态: {profile_data.get('online')}")
+
+            # 活跃度统计
+            details.append("")  # 空行分隔
+
+            if profile_data.get('threads'):
+                details.append(f"主题: {profile_data.get('threads')}")
+
+            if profile_data.get('posts'):
+                details.append(f"帖子: {profile_data.get('posts')}")
+
+            if profile_data.get('extcredits'):
+                details.append(f"成长值: {profile_data.get('extcredits')}")
+
+            if profile_data.get('blackpoints'):
+                details.append(f"小黑点: {profile_data.get('blackpoints')}")
+
+            if profile_data.get('attendcount'):
+                details.append(f"签到次数: {profile_data.get('attendcount')}")
+
+            if profile_data.get('digestposts'):
+                details.append(f"精华: {profile_data.get('digestposts')}")
+
+            # 社交信息
+            details.append("")  # 空行分隔
+
+            if profile_data.get('following'):
+                details.append(f"关注: {profile_data.get('following')}")
+
+            if profile_data.get('followers'):
+                details.append(f"粉丝: {profile_data.get('followers')}")
+
+            # 其他资料
+            details.append("")  # 空行分隔
+
+            if profile_data.get('email'):
+                details.append(f"邮箱: {profile_data.get('email')}")
+
+            if profile_data.get('gender'):
+                details.append(f"性别: {self.format_gender(profile_data.get('gender'))}")
+
+            if profile_data.get('birthday'):
+                details.append(f"生日: {profile_data.get('birthday')}")
+
+            if profile_data.get('location'):
+                details.append(f"所在地: {profile_data.get('location')}")
+
+            if profile_data.get('signature'):
+                details.append(f"\n个人签名:\n{profile_data.get('signature')}")
+
+            # 设置文本内容
+            text_ctrl.SetValue('\n'.join(details) if details else "暂无详细资料")
+
+            # 添加到布局
+            main_sizer.Add(text_ctrl, 1, wx.EXPAND | wx.ALL, 10)
+
+            # 关闭按钮
+            close_btn = wx.Button(dialog, label="关闭(&C)")
+            close_btn.Bind(wx.EVT_BUTTON, lambda e: dialog.Close())
+            main_sizer.Add(close_btn, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+
+            dialog.SetSizerAndFit(main_sizer)
+            dialog.CenterOnParent()
+            dialog.ShowModal()
+            dialog.Destroy()
+
+        except Exception as e:
+            wx.MessageBox(f"显示详细资料失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+
+    def format_timestamp(self, timestamp):
+        """格式化时间戳"""
+        try:
+            if isinstance(timestamp, (int, float)):
+                return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+            return str(timestamp)
+        except Exception:
+            return str(timestamp)
+
+    def format_gender(self, gender):
+        """格式化性别显示"""
+        try:
+            gender_map = {
+                '1': '男',
+                '0': '女',
+                '2': '保密'
+            }
+            return gender_map.get(str(gender), '未知')
+        except Exception:
+            return '未知'
+
+    def on_edit_post(self, post_data, is_thread_author):
+        """编辑帖子"""
+        try:
+            # 获取必要信息
+            pid = post_data.get('pid')
+            fid = post_data.get('fid')
+            tid = post_data.get('tid')
+
+            if not all([pid, fid, tid]):
+                wx.MessageBox("无法获取帖子信息", "错误", wx.OK | wx.ICON_ERROR)
+                return
+
+            # 保存编辑目标
+            self.edit_target = {
+                'pid': pid,
+                'fid': fid,
+                'tid': tid,
+                'is_thread_author': is_thread_author,
+                'original_data': post_data
+            }
+
+            # 显示编辑对话框
+            self.show_edit_dialog(post_data, is_thread_author)
+
+        except Exception as e:
+            wx.MessageBox(f"编辑帖子失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+
+    def show_edit_dialog(self, post_data, is_thread_author):
+        """显示编辑对话框"""
+        try:
+            dialog = wx.Dialog(self, title="编辑帖子", size=(600, 400))
+            panel = wx.Panel(dialog)
+            sizer = wx.BoxSizer(wx.VERTICAL)
+
+            # 如果是楼主，显示标题编辑
+            if is_thread_author:
+                # 标题输入
+                title_label = wx.StaticText(panel, label="标题:")
+                sizer.Add(title_label, 0, wx.ALL, 5)
+
+                title_ctrl = wx.TextCtrl(panel, value=post_data.get('subject', ''))
+                sizer.Add(title_ctrl, 0, wx.EXPAND | wx.ALL, 5)
+            else:
+                title_ctrl = None
+
+            # 内容编辑
+            content_label = wx.StaticText(panel, label="内容:")
+            sizer.Add(content_label, 0, wx.ALL, 5)
+
+            # 获取原始内容（清理HTML标签）
+            original_content = self.clean_html_tags(post_data.get('message', ''))
+            content_ctrl = wx.TextCtrl(panel, value=original_content, style=wx.TE_MULTILINE)
+            sizer.Add(content_ctrl, 1, wx.EXPAND | wx.ALL, 5)
+
+            # 按钮区域
+            btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # 确定按钮
+            ok_btn = wx.Button(panel, label="确定(&O)")
+            ok_btn.Bind(wx.EVT_BUTTON, lambda e: self.save_edit(dialog, title_ctrl if is_thread_author else None, content_ctrl))
+            btn_sizer.Add(ok_btn, 0, wx.ALL, 5)
+
+            # 取消按钮
+            cancel_btn = wx.Button(panel, label="取消(&C)")
+            cancel_btn.Bind(wx.EVT_BUTTON, lambda e: dialog.Close())
+            btn_sizer.Add(cancel_btn, 0, wx.ALL, 5)
+
+            sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+
+            panel.SetSizer(sizer)
+            dialog.SetSizerAndFit(sizer)
+
+            # 居中显示
+            dialog.CenterOnParent()
+
+            # 设置焦点到内容编辑框
+            if is_thread_author:
+                title_ctrl.SetFocus()
+            else:
+                content_ctrl.SetFocus()
+
+            dialog.ShowModal()
+            dialog.Destroy()
+
+        except Exception as e:
+            wx.MessageBox(f"显示编辑对话框失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+
+    def save_edit(self, dialog, title_ctrl, content_ctrl):
+        """保存编辑"""
+        try:
+            # 获取编辑内容
+            title = title_ctrl.GetValue().strip() if title_ctrl else None
+            content = content_ctrl.GetValue().strip()
+
+            if not content:
+                wx.MessageBox("内容不能为空", "提示", wx.OK | wx.ICON_WARNING)
+                return
+
+            edit_target = getattr(self, 'edit_target', {})
+            if not edit_target:
+                wx.MessageBox("编辑目标信息丢失", "错误", wx.OK | wx.ICON_ERROR)
+                return
+
+            # 准备编辑参数
+            edit_params = {
+                'fid': edit_target['fid'],
+                'pid': edit_target['pid'],
+                'message': content
+            }
+
+            # 如果是楼主，添加标题和分类信息
+            if edit_target['is_thread_author'] and title:
+                edit_params['subject'] = title
+                # 从原始数据获取分类信息
+                original_data = edit_target.get('original_data', {})
+                edit_params['typeid1'] = original_data.get('typeid1')
+                edit_params['typeid2'] = original_data.get('typeid2')
+                edit_params['typeid3'] = original_data.get('typeid3')
+                edit_params['typeid4'] = original_data.get('typeid4')
+
+            # 调用编辑API
+            success = self.forum_client.update_post(self.current_forum, edit_params)
+
+            if success:
+                wx.MessageBox("编辑成功", "成功", wx.OK | wx.ICON_INFORMATION)
+                dialog.Close()
+                # 刷新帖子详情
+                self.load_thread_detail(edit_target['tid'])
+            else:
+                wx.MessageBox("编辑失败", "错误", wx.OK | wx.ICON_ERROR)
+
+        except Exception as e:
+            wx.MessageBox(f"保存编辑失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+
+    
+    def on_filter_posts_by_user(self, username, uid):
+        """只看他功能 - 筛选特定用户的帖子"""
+        if not self.current_content_type == 'thread_detail' or not self.current_tid:
+            return
+
+        # 保存当前状态，用于退格键返回
+        self.previous_state = {
+            'content_type': self.current_content_type,
+            'tid': self.current_tid,
+            'selected_index': getattr(self, 'saved_list_index', 0),
+            'page': getattr(self, 'current_page', 1),
+            'filter_mode': getattr(self, 'filter_mode', None)
+        }
+
+        # 设置筛选模式
+        self.filter_mode = {
+            'username': username,
+            'uid': uid,
+            'original_tid': self.current_tid
+        }
+
+        # 重新加载帖子详情，带筛选参数
+        self.load_thread_detail_with_filter(self.current_tid, uid)
+
+    def load_thread_detail_with_filter(self, tid, uid):
+        """加载筛选后的帖子详情 - 使用API筛选"""
+        try:
+            # 获取当前页面的筛选帖子详情
+            current_page = getattr(self, 'current_page', 1)
+            result = self.forum_client.get_thread_detail(self.current_forum, tid, page=current_page, uid=uid)
+
+            if 'postlist' in result and 'pagination' in result:
+                post_list = result.get('postlist', [])
+                thread_info = result.get('thread_info', {})
+                pagination = result.get('pagination', {})
+                page_info = {
+                    'current': pagination.get('page', 1),
+                    'total': pagination.get('totalpage', 1)
+                }
+
+                # 更新当前页面信息
+                self.current_page = page_info['current']
+                self.total_pages = page_info['total']
+                self.current_pagination = page_info
+
+                # 显示筛选后的帖子
+                self.display_filtered_posts(post_list, thread_info, page_info)
+
+                # 更新窗口标题显示筛选状态
+                filter_username = self.filter_mode.get('username', '')
+                self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手 (只看{filter_username})")
+
+                # 自动焦点到第一个帖子
+                if hasattr(self, 'list_ctrl') and self.list_ctrl.GetItemCount() > 0:
+                    self.list_ctrl.SetFocus()
+                    # 选择第一个项目
+                    self.list_ctrl.SelectRow(0)
+                    # 保存当前选中的索引
+                    self.saved_list_index = 0
+
+            else:
+                self.show_error_message("获取筛选帖子失败：API返回数据格式不正确")
+
+        except Exception as e:
+            self.show_error_message(f"筛选帖子时发生错误: {str(e)}")
+        finally:
+            # 状态栏已移除，无需设置状态文本
+            pass
+
+    def display_filtered_posts(self, post_list, thread_info, page_info):
+        """显示筛选后的帖子列表"""
+        # 清空列表
+        self.list_ctrl.DeleteAllItems()
+        self.list_data.clear()
+
+        if not post_list:
+            self.show_info_message("该用户在此帖子中没有发表内容")
+            return
+
+        # 添加帖子项，使用简单的序号而不是原始楼层数
+        for i, post in enumerate(post_list):
+            try:
+                # 格式化帖子内容
+                username = post.get('username', '')
+                message = post.get('message', '')
+                dateline = post.get('dateline_fmt', '')
+
+                # 清理HTML标签
+                clean_message = self.clean_html_tags(message)
+
+                # 构建显示文本，使用简单序号
+                if i == 0:
+                    display_text = f"楼主 {username} 说\n{clean_message}\n发表时间：{dateline}"
+                else:
+                    display_text = f"{i+1}楼 {username} 说\n{clean_message}\n发表时间：{dateline}"
+
+                # 添加到列表
+                index = self.list_ctrl.AppendItem([display_text])
+                self.list_data.append({
+                    'type': 'post',
+                    'data': post,
+                    'floor_index': i
+                })
+
+            except Exception as e:
+                print(f"显示筛选帖子项时出错: {e}")
+                continue
+
+        # 添加分页控制
+        pagination = {
+            'page': page_info['current'],
+            'totalpage': page_info['total']
+        }
+        self.add_pagination_controls(pagination)
+
+    def exit_filter_mode(self):
+        """退出筛选模式，返回原始帖子详情"""
+        if not hasattr(self, 'filter_mode') or not self.filter_mode:
+            return
+
+        # 获取原始帖子信息
+        original_tid = self.filter_mode.get('original_tid')
+
+        # 清除筛选模式
+        self.filter_mode = None
+
+        # 恢复原始帖子详情显示
+        self.load_thread_detail(original_tid)
+
+        # 立即更新窗口标题，移除筛选状态
+        self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
+
+    def on_view_user_threads(self, username, uid):
+        """查看用户的主题帖子"""
+        if not uid:
+            return
+
+        # 保存当前状态
+        self.save_current_state()
+
+        # 设置用户内容查看模式
+        self.user_content_mode = {
+            'username': username,
+            'uid': uid,
+            'content_type': 'threads'
+        }
+
+        # 加载用户的主题帖子
+        self.load_user_threads_and_restore_focus(uid)
+
+    def on_view_user_posts(self, username, uid):
+        """查看用户的回复帖子"""
+        if not uid:
+            return
+
+        # 保存当前状态
+        self.save_current_state()
+
+        # 设置用户内容查看模式
+        self.user_content_mode = {
+            'username': username,
+            'uid': uid,
+            'content_type': 'posts'
+        }
+
+        # 加载用户的回复帖子
+        self.load_user_posts_and_restore_focus(uid)
+
+    def save_current_state(self):
+        """保存当前状态，用于返回导航"""
+        self.previous_state = {
+            'content_type': self.current_content_type,
+            'tid': getattr(self, 'current_tid', None),
+            'selected_index': getattr(self, 'saved_list_index', 0),
+            'page': getattr(self, 'current_page', 1),
+            'filter_mode': getattr(self, 'filter_mode', None),
+            'user_content_mode': getattr(self, 'user_content_mode', None)
+        }
+
+    def load_user_threads_and_restore_focus(self, uid):
+        """加载用户的主题帖子并恢复焦点"""
+        try:
+            # 状态栏已移除，无需设置状态文本
+
+            # 调用API获取用户的主题帖子
+            result = self.forum_client.get_user_threads(self.current_forum, uid, page=1)
+
+            # 使用原始数据结构，包含threadlist和pagination
+            threadlist = result.get('threadlist', [])
+            pagination = result.get('pagination', {})
+
+            # 更新当前状态
+            self.current_content_type = 'user_threads'
+            self.current_uid = uid
+            self.current_page = pagination.get('page', 1)
+            self.total_pages = pagination.get('totalpage', 1)
+
+            # 显示用户的主题帖子
+            # 直接传递pagination对象，因为display_threads期望的格式是{'page': x, 'totalpage': y}
+            self.display_threads(threadlist, pagination, 'user_threads')
+
+            # 更新窗口标题
+            username = self.user_content_mode.get('username', str(uid))
+            self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手 ({username}的主题)")
+
+            # 设置焦点到第一个项目
+            wx.CallAfter(self.reset_keyboard_cursor, 0)
+
+        except Exception as e:
+            self.show_error_message(f"加载用户主题帖子时发生错误: {str(e)}")
+        finally:
+            # 状态栏已移除，无需设置状态文本
+            pass
+
+    def load_user_posts_and_restore_focus(self, uid):
+        """加载用户的回复帖子并恢复焦点"""
+        try:
+            # 状态栏已移除，无需设置状态文本
+
+            # 调用API获取用户的回复帖子
+            result = self.forum_client.get_user_posts(self.current_forum, uid, page=1)
+
+            # 使用原始数据结构，包含threadlist和pagination
+            threadlist = result.get('threadlist', [])
+            pagination = result.get('pagination', {})
+
+            # 需要转换为display_threads期望的格式，显示为回复列表
+            formatted_threads = []
+            for item in threadlist:
+                thread_info = item.get('thread', {})
+                post_info = item.get('post', {})
+                if thread_info and post_info:
+                    # 构造显示为回复的格式，按照新的显示格式要求
+                    formatted_thread = {
+                        'tid': thread_info.get('tid'),
+                        'subject': thread_info.get('subject', ''),
+                        'username': thread_info.get('username', ''),
+                        'uid': thread_info.get('uid'),
+                        'dateline_fmt': thread_info.get('dateline_fmt', ''),  # 帖子发表时间
+                        'views': thread_info.get('views', 0),
+                        'posts': thread_info.get('posts', 0),
+                        'forumname': item.get('forumname', ''),
+                        'lastpost_fmt': post_info.get('dateline_fmt', ''),  # 回复时间作为最后回复时间
+                        'lastusername': post_info.get('username', '') or thread_info.get('lastusername', '')  # 优先使用回复者，否则使用帖子最后回复者
+                    }
+                    formatted_threads.append(formatted_thread)
+
+            # 更新当前状态
+            self.current_content_type = 'user_posts'
+            self.current_uid = uid
+            self.current_page = pagination.get('page', 1)
+            self.total_pages = pagination.get('totalpage', 1)
+
+            # 显示用户的回复帖子
+            # 直接传递pagination对象，因为display_threads期望的格式是{'page': x, 'totalpage': y}
+            self.display_threads(formatted_threads, pagination, 'user_posts')
+
+            # 更新窗口标题
+            username = self.user_content_mode.get('username', str(uid))
+            self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手 ({username}的回复)")
+
+            # 设置焦点到第一个项目
+            wx.CallAfter(self.reset_keyboard_cursor, 0)
+
+        except Exception as e:
+            self.show_error_message(f"加载用户回复帖子时发生错误: {str(e)}")
+        finally:
+            # 状态栏已移除，无需设置状态文本
+            pass
+
+    def show_info_message(self, message):
+        """显示信息提示"""
+        wx.MessageBox(message, "提示", wx.OK | wx.ICON_INFORMATION)
+
+    def show_error_message(self, message):
+        """显示错误提示"""
+        wx.MessageBox(message, "错误", wx.OK | wx.ICON_ERROR)
+
+    # 键盘事件处理的辅助方法
+    def handle_reply_to_floor(self, selected_row):
+        """处理回复此楼功能"""
+        if selected_row >= len(self.list_data):
+            return
+
+        item_data = self.list_data[selected_row]
+        if item_data.get('type') != 'post':
+            return
+
+        post_data = item_data.get('data', {})
+        if not post_data:
+            return
+
+        # 调用回复此楼方法
+        self.on_reply_to_floor(post_data)
+
+    def handle_view_user_profile(self, selected_row):
+        """处理查看用户资料功能"""
+        if selected_row >= len(self.list_data):
+            return
+
+        item_data = self.list_data[selected_row]
+        if item_data.get('type') != 'post':
+            return
+
+        post_data = item_data.get('data', {})
+        if not post_data:
+            return
+
+        # 获取用户信息
+        username = post_data.get('author', '')
+        uid = post_data.get('authorid', '')
+
+        if not uid:
+            self.show_error_message("无法获取用户信息")
+            return
+
+        # 调用查看用户资料方法
+        self.on_view_user_profile(uid, username)
+
+    def handle_filter_by_user(self, selected_row):
+        """处理只看他功能"""
+        if selected_row >= len(self.list_data):
+            return
+
+        item_data = self.list_data[selected_row]
+        if item_data.get('type') != 'post':
+            return
+
+        post_data = item_data.get('data', {})
+        if not post_data:
+            return
+
+        # 获取用户信息
+        username = post_data.get('author', '')
+        uid = post_data.get('authorid', '')
+
+        if not uid:
+            self.show_error_message("无法获取用户信息")
+            return
+
+        # 调用筛选方法
+        self.on_filter_posts_by_user(username, uid)
+
+    def handle_user_content_menu(self, selected_row):
+        """处理用户内容二级菜单"""
+        if selected_row >= len(self.list_data):
+            return
+
+        item_data = self.list_data[selected_row]
+        if item_data.get('type') != 'post':
+            return
+
+        post_data = item_data.get('data', {})
+        if not post_data:
+            return
+
+        # 获取用户信息
+        username = post_data.get('author', '')
+        uid = post_data.get('authorid', '')
+
+        if not uid:
+            self.show_error_message("无法获取用户信息")
+            return
+
+        # 显示用户内容二级菜单
+        self.show_user_content_submenu(username, uid)
+
+    def handle_edit_post(self, selected_row):
+        """处理编辑帖子功能"""
+        if selected_row >= len(self.list_data):
+            return
+
+        item_data = self.list_data[selected_row]
+        if item_data.get('type') != 'post':
+            return
+
+        post_data = item_data.get('data', {})
+        if not post_data:
+            return
+
+        # 检查是否有编辑权限
+        if not self.should_show_edit_menu(post_data):
+            self.show_error_message("您没有编辑此帖子的权限")
+            return
+
+        # 调用编辑方法
+        self.on_edit_post(post_data)
+
+    def show_user_content_submenu(self, username, uid):
+        """显示用户内容二级菜单"""
+        # 创建菜单
+        menu = wx.Menu()
+
+        threads_item = menu.Append(wx.ID_ANY, f"{username}的发布")
+        posts_item = menu.Append(wx.ID_ANY, f"{username}的回复")
+
+        # 绑定事件
+        self.Bind(wx.EVT_MENU, lambda e: self.on_view_user_threads(username, uid), threads_item)
+        self.Bind(wx.EVT_MENU, lambda e: self.on_view_user_posts(username, uid), posts_item)
+
+        # 显示菜单
+        self.list_ctrl.PopupMenu(menu)
+        menu.Destroy()
+
+    def exit_user_content_mode(self):
+        """退出用户内容查看模式，返回之前的帖子详情"""
+        if not hasattr(self, 'user_content_mode') or not self.user_content_mode:
+            return
+
+        # 清除用户内容模式
+        self.user_content_mode = None
+
+        # 恢复之前的帖子详情
+        if hasattr(self, 'previous_state') and self.previous_state:
+            state = self.previous_state
+            if state.get('content_type') == 'thread_detail' and state.get('tid'):
+                # 恢复到帖子详情
+                self.load_thread_detail(state['tid'])
+
+                # 恢复焦点位置
+                if state.get('selected_index') is not None:
+                    wx.CallAfter(lambda: self.restore_list_focus(state['selected_index']))
+        else:
+            # 如果没有之前的帖子详情状态，恢复到默认标题
+            self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
+
+    def restore_list_focus(self, index):
+        """恢复列表焦点到指定位置"""
+        if hasattr(self, 'list_ctrl') and self.list_ctrl.GetItemCount() > index:
+            self.list_ctrl.SelectRow(index)
+            self.list_ctrl.SetFocus()
