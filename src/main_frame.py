@@ -699,40 +699,66 @@ class MainFrame(wx.Frame):
             else:
                 event.Skip()
         elif keycode == wx.WXK_RETURN:
-            if ctrl_down:
-                # Ctrl+回车：回复此楼（仅在帖子详情页面）
-                if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+            if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                # 在帖子详情页面中处理所有回车键组合
+                if ctrl_down:
+                    # Ctrl+回车：回复此楼
                     selected = self.list_ctrl.GetSelectedRow()
                     if selected != -1 and selected < len(self.list_data):
                         self.handle_reply_to_floor(selected)
-                    else:
-                        event.Skip()
-                else:
-                    event.Skip()
-            elif shift_down:
-                # Shift+回车：查看用户资料（仅在帖子详情页面）
-                if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                    # 不调用 event.Skip()，阻止事件传播
+                    return
+                elif shift_down:
+                    # Shift+回车：查看用户资料
                     selected = self.list_ctrl.GetSelectedRow()
                     if selected != -1 and selected < len(self.list_data):
                         self.handle_view_user_profile(selected)
+                    # 不调用 event.Skip()，阻止事件传播
+                    return
+                else:
+                    # 普通回车键：激活当前选中项（浏览楼层）
+                    selected = self.list_ctrl.GetSelectedRow()
+                    if selected != -1:
+                        self.handle_row_activation(selected)
+                    # 不调用 event.Skip()，阻止事件传播
+                    return
+            else:
+                # 在其他页面中，保持原有逻辑
+                if ctrl_down:
+                    # Ctrl+回车：回复此楼（仅在帖子详情页面）
+                    if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                        selected = self.list_ctrl.GetSelectedRow()
+                        if selected != -1 and selected < len(self.list_data):
+                            self.handle_reply_to_floor(selected)
+                        else:
+                            event.Skip()
+                    else:
+                        event.Skip()
+                elif shift_down:
+                    # Shift+回车：查看用户资料（仅在帖子详情页面）
+                    if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                        selected = self.list_ctrl.GetSelectedRow()
+                        if selected != -1 and selected < len(self.list_data):
+                            self.handle_view_user_profile(selected)
+                        else:
+                            event.Skip()
                     else:
                         event.Skip()
                 else:
-                    event.Skip()
-            else:
-                # 普通回车键：激活当前选中项
-                selected = self.list_ctrl.GetSelectedRow()
-                if selected != -1:
-                    # 直接调用激活逻辑，不需要创建复杂的事件对象
-                    self.handle_row_activation(selected)
-                else:
-                    event.Skip()
+                    # 普通回车键：激活当前选中项
+                    selected = self.list_ctrl.GetSelectedRow()
+                    if selected != -1:
+                        # 直接调用激活逻辑，不需要创建复杂的事件对象
+                        self.handle_row_activation(selected)
+                    else:
+                        event.Skip()
         elif keycode == ord('K') or keycode == ord('k'):
             # K键：只看他功能（仅在帖子详情页面）
             if hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
                 selected = self.list_ctrl.GetSelectedRow()
                 if selected != -1 and selected < len(self.list_data):
                     self.handle_filter_by_user(selected)
+                    return  # 处理完成后直接返回，不调用event.Skip()
                 else:
                     event.Skip()
             else:
@@ -743,6 +769,7 @@ class MainFrame(wx.Frame):
                 selected = self.list_ctrl.GetSelectedRow()
                 if selected != -1 and selected < len(self.list_data):
                     self.handle_user_content_menu(selected)
+                    return  # 处理完成后直接返回，不调用event.Skip()
                 else:
                     event.Skip()
             else:
@@ -753,6 +780,7 @@ class MainFrame(wx.Frame):
                 selected = self.list_ctrl.GetSelectedRow()
                 if selected != -1 and selected < len(self.list_data):
                     self.handle_edit_post(selected)
+                    return  # 处理完成后直接返回，不调用event.Skip()
                 else:
                     event.Skip()
             else:
@@ -1266,7 +1294,7 @@ class MainFrame(wx.Frame):
             menu = wx.Menu()
 
             # 基础功能
-            refresh_item = menu.Append(wx.ID_ANY, "刷新\tF5")
+            refresh_item = menu.Append(wx.ID_ANY, "刷新(&R)\tF5")
             menu.AppendSeparator()
 
             # 检查是否处于筛选模式
@@ -1278,39 +1306,39 @@ class MainFrame(wx.Frame):
                 tip_item = menu.Append(wx.ID_ANY, f"筛选模式：只看{filter_username}")
                 tip_item.Enable(False)  # 禁用，仅作提示
                 menu.AppendSeparator()
-                reply_item = menu.Append(wx.ID_ANY, f"回复{username}\tCtrl+回车")
-                profile_item = menu.Append(wx.ID_ANY, f"查看{username}的资料\tShift+回车")
+                reply_item = menu.Append(wx.ID_ANY, f"回复{username}(&H)\tCtrl+回车")
+                profile_item = menu.Append(wx.ID_ANY, f"查看{username}的资料(&P)\tShift+回车")
 
                 # 筛选模式下如果可以编辑仍显示编辑功能
                 if can_edit:
                     if is_thread_author:
-                        edit_item = menu.Append(wx.ID_ANY, f"编辑帖子\tCtrl+E")
+                        edit_item = menu.Append(wx.ID_ANY, f"编辑帖子(&E)\tCtrl+E")
                     else:
-                        edit_item = menu.Append(wx.ID_ANY, f"编辑回复\tCtrl+E")
+                        edit_item = menu.Append(wx.ID_ANY, f"编辑回复(&E)\tCtrl+E")
                     menu.AppendSeparator()
                 else:
                     menu.AppendSeparator()
             else:
                 # 正常模式下的完整功能
-                reply_item = menu.Append(wx.ID_ANY, f"回复{username}\tCtrl+回车")
-                profile_item = menu.Append(wx.ID_ANY, f"查看{username}的资料\tShift+回车")
+                reply_item = menu.Append(wx.ID_ANY, f"回复{username}(&H)\tCtrl+回车")
+                profile_item = menu.Append(wx.ID_ANY, f"查看{username}的资料(&P)\tShift+回车")
 
                 # 只有自己的帖子才显示编辑功能
                 if can_edit:
                     menu.AppendSeparator()
                     if is_thread_author:
-                        edit_item = menu.Append(wx.ID_ANY, f"编辑帖子\tCtrl+E")
+                        edit_item = menu.Append(wx.ID_ANY, f"编辑帖子(&E)\tCtrl+E")
                     else:
-                        edit_item = menu.Append(wx.ID_ANY, f"编辑回复\tCtrl+E")
+                        edit_item = menu.Append(wx.ID_ANY, f"编辑回复(&E)\tCtrl+E")
 
                 menu.AppendSeparator()
-                filter_item = menu.Append(wx.ID_ANY, f"只看{username}(K)")
+                filter_item = menu.Append(wx.ID_ANY, f"只看{username}(&K)")
 
                 # 用户内容的二级菜单
                 user_content_menu = wx.Menu()
-                threads_item = user_content_menu.Append(wx.ID_ANY, f"{username}的发布")
-                posts_item = user_content_menu.Append(wx.ID_ANY, f"{username}的回复")
-                menu.AppendSubMenu(user_content_menu, f"{username}的全部帖子(T)")
+                threads_item = user_content_menu.Append(wx.ID_ANY, f"{username}的发布(&F)")
+                posts_item = user_content_menu.Append(wx.ID_ANY, f"{username}的回复(&H)")
+                menu.AppendSubMenu(user_content_menu, f"{username}的全部帖子(&T)")
 
             # 事件绑定
             self.Bind(wx.EVT_MENU, lambda e: self.on_refresh_thread_detail(), refresh_item)
@@ -1357,11 +1385,11 @@ class MainFrame(wx.Frame):
             menu = wx.Menu()
 
             # 添加菜单项
-            refresh_item = menu.Append(wx.ID_ANY, "刷新\tF5")
+            refresh_item = menu.Append(wx.ID_ANY, "刷新(&R)\tF5")
             menu.AppendSeparator()
             open_web_item = menu.Append(wx.ID_ANY, "网页打开(&W)\tCtrl+W")
-            copy_title_item = menu.Append(wx.ID_ANY, "拷贝帖子标题\tCtrl+C")
-            copy_url_item = menu.Append(wx.ID_ANY, "拷贝帖子地址\tCtrl+D")
+            copy_title_item = menu.Append(wx.ID_ANY, "拷贝帖子标题(&C)\tCtrl+C")
+            copy_url_item = menu.Append(wx.ID_ANY, "拷贝帖子地址(&D)\tCtrl+D")
 
             # 绑定事件
             self.Bind(wx.EVT_MENU, self.on_refresh, refresh_item)
@@ -1387,6 +1415,14 @@ class MainFrame(wx.Frame):
     def handle_row_activation(self, selected_row):
         """处理行激活的通用逻辑"""
         try:
+            # 检查是否正在处理用户资料查看
+            if hasattr(self, '_handling_user_profile') and self._handling_user_profile:
+                return
+
+            # 检查是否正在处理回复
+            if hasattr(self, '_handling_reply') and self._handling_reply:
+                return
+
             # 检查行索引是否有效
             if selected_row < 0 or selected_row >= len(self.list_data):
                 return
@@ -4482,12 +4518,28 @@ class MainFrame(wx.Frame):
         if item_data.get('type') != 'post':
             return
 
-        post_data = item_data.get('data', {})
+        # 兼容两种数据结构：正常模式使用 'post_data'，筛选模式使用 'data'
+        if 'post_data' in item_data:
+            # 正常模式
+            post_data = item_data.get('post_data', {})
+        else:
+            # 筛选模式
+            post_data = item_data.get('data', {})
+
         if not post_data:
             return
 
+        # 设置标记，表示正在处理回复
+        self._handling_reply = True
+
         # 调用回复此楼方法
         self.on_reply_to_floor(post_data)
+
+        # 延迟清除标记
+        def clear_flag():
+            self._handling_reply = False
+
+        wx.CallLater(500, clear_flag)
 
     def handle_view_user_profile(self, selected_row):
         """处理查看用户资料功能"""
@@ -4498,20 +4550,36 @@ class MainFrame(wx.Frame):
         if item_data.get('type') != 'post':
             return
 
-        post_data = item_data.get('data', {})
+        # 兼容两种数据结构：正常模式使用 'post_data'，筛选模式使用 'data'
+        if 'post_data' in item_data:
+            # 正常模式
+            post_data = item_data.get('post_data', {})
+        else:
+            # 筛选模式
+            post_data = item_data.get('data', {})
+
         if not post_data:
             return
 
         # 获取用户信息
-        username = post_data.get('author', '')
-        uid = post_data.get('authorid', '')
+        username = post_data.get('username') or post_data.get('author', '')
+        uid = post_data.get('uid') or post_data.get('authorid', '')
 
         if not uid:
             self.show_error_message("无法获取用户信息")
             return
 
+        # 设置标记，表示正在处理用户资料查看
+        self._handling_user_profile = True
+
         # 调用查看用户资料方法
         self.on_view_user_profile(uid, username)
+
+        # 延迟清除标记
+        def clear_flag():
+            self._handling_user_profile = False
+
+        wx.CallLater(500, clear_flag)
 
     def handle_filter_by_user(self, selected_row):
         """处理只看他功能"""
@@ -4522,13 +4590,20 @@ class MainFrame(wx.Frame):
         if item_data.get('type') != 'post':
             return
 
-        post_data = item_data.get('data', {})
+        # 兼容两种数据结构：正常模式使用 'post_data'，筛选模式使用 'data'
+        if 'post_data' in item_data:
+            # 正常模式
+            post_data = item_data.get('post_data', {})
+        else:
+            # 筛选模式
+            post_data = item_data.get('data', {})
+
         if not post_data:
             return
 
         # 获取用户信息
-        username = post_data.get('author', '')
-        uid = post_data.get('authorid', '')
+        username = post_data.get('username') or post_data.get('author', '')
+        uid = post_data.get('uid') or post_data.get('authorid', '')
 
         if not uid:
             self.show_error_message("无法获取用户信息")
@@ -4546,13 +4621,20 @@ class MainFrame(wx.Frame):
         if item_data.get('type') != 'post':
             return
 
-        post_data = item_data.get('data', {})
+        # 兼容两种数据结构：正常模式使用 'post_data'，筛选模式使用 'data'
+        if 'post_data' in item_data:
+            # 正常模式
+            post_data = item_data.get('post_data', {})
+        else:
+            # 筛选模式
+            post_data = item_data.get('data', {})
+
         if not post_data:
             return
 
         # 获取用户信息
-        username = post_data.get('author', '')
-        uid = post_data.get('authorid', '')
+        username = post_data.get('username') or post_data.get('author', '')
+        uid = post_data.get('uid') or post_data.get('authorid', '')
 
         if not uid:
             self.show_error_message("无法获取用户信息")
@@ -4570,7 +4652,14 @@ class MainFrame(wx.Frame):
         if item_data.get('type') != 'post':
             return
 
-        post_data = item_data.get('data', {})
+        # 兼容两种数据结构：正常模式使用 'post_data'，筛选模式使用 'data'
+        if 'post_data' in item_data:
+            # 正常模式
+            post_data = item_data.get('post_data', {})
+        else:
+            # 筛选模式
+            post_data = item_data.get('data', {})
+
         if not post_data:
             return
 
@@ -4587,8 +4676,8 @@ class MainFrame(wx.Frame):
         # 创建菜单
         menu = wx.Menu()
 
-        threads_item = menu.Append(wx.ID_ANY, f"{username}的发布")
-        posts_item = menu.Append(wx.ID_ANY, f"{username}的回复")
+        threads_item = menu.Append(wx.ID_ANY, f"{username}的发布(&F)")
+        posts_item = menu.Append(wx.ID_ANY, f"{username}的回复(&H)")
 
         # 绑定事件
         self.Bind(wx.EVT_MENU, lambda e: self.on_view_user_threads(username, uid), threads_item)

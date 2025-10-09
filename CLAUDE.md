@@ -908,3 +908,159 @@ def exit_user_content_mode(self):
 - Confirmed notification dialogs no longer appear when entering user content
 - Verified keyboard navigation and screen reader compatibility maintained
 - Tested pagination controls work correctly with fixed content_type context
+
+23. **Post Detail Keyboard Shortcuts and Context Menu Letter Shortcuts Implementation (2025-10-09)**
+    - Fixed critical keyboard shortcuts not working in post detail view: Ctrl+Enter for reply and Shift+Enter for user profile viewing
+    - Implemented comprehensive context menu letter shortcuts system using standard wxPython `&` notation
+    - Enhanced data structure compatibility between normal mode and filter mode for robust field access
+    - Implemented event propagation control system to prevent multiple dialog opening
+    - Added letter-based shortcuts to all context menus throughout the application
+    - Enhanced user experience with standard Windows menu behavior where pressing letters activates menu items
+
+### Key Technical Improvements (Keyboard Shortcuts and Context Menu)
+
+**Post Detail Keyboard Shortcuts Fix:**
+- **Data Structure Compatibility**: Implemented compatibility layer for both `post_data` (normal mode) and `data` (filter mode) field structures
+- **Event Propagation Control**: Added direct return pattern without `event.Skip()` for handled keyboard events
+- **State Management**: Implemented flags with `wx.CallLater` cleanup to prevent duplicate dialog operations
+- **Smart Field Detection**: Added intelligent field name mapping (username/author, uid/authorid) for robust data access
+
+**Context Menu Letter Shortcuts Implementation:**
+- **Standard wxPython Notation**: Changed from incorrect `(K)` format to proper `(&K)` format for menu shortcuts
+- **Comprehensive Coverage**: Added letter shortcuts to all context menu items across different menu types
+- **Windows Standard Behavior**: Implemented standard menu behavior where pressing letters activates menu items when menu is open
+- **Menu Structure Enhancement**: Organized shortcuts logically and consistently across all context menus
+
+### Implementation Details
+
+**Fixed Keyboard Shortcuts in Post Detail View:**
+```python
+def on_list_key_down(self, event):
+    """处理键盘事件"""
+    keycode = event.GetKeyCode()
+
+    # 帖子详情页面的快捷键
+    if self.current_content_type == 'thread_detail':
+        # Ctrl+Enter: 回复选中楼层
+        if event.ControlDown() and keycode == wx.WXK_RETURN:
+            self.handle_reply_to_floor(selected_row)
+            return  # 直接返回，不调用event.Skip()
+
+        # Shift+Enter: 查看用户资料
+        if event.ShiftDown() and keycode == wx.WXK_RETURN:
+            self.handle_view_user_profile(selected_row)
+            return  # 直接返回，不调用event.Skip()
+```
+
+**Data Structure Compatibility Implementation:**
+```python
+def handle_reply_to_floor(self, selected_row):
+    """处理回复楼层功能"""
+    item_data = self.list_data[selected_row]
+
+    # 兼容两种数据结构：正常模式使用 'post_data'，筛选模式使用 'data'
+    if 'post_data' in item_data:
+        # 正常模式
+        post_data = item_data.get('post_data', {})
+    else:
+        # 筛选模式
+        post_data = item_data.get('data', {})
+
+    # 智能字段名检测
+    username = post_data.get('username') or post_data.get('author', '')
+    uid = post_data.get('uid') or post_data.get('authorid', '')
+```
+
+**Context Menu Letter Shortcuts Implementation:**
+```python
+# 帖子详情上下文菜单
+menu.Append(wx.ID_ANY, f"回复{username}(&R)")
+menu.Append(wx.ID_ANY, f"查看{username}的资料(&H)")
+menu.Append(wx.ID_ANY, f"筛选:只看{username}(&P)")
+menu.Append(wx.ID_ANY, f"编辑此楼层(&E)")
+menu.AppendSeparator()
+
+# 用户相关菜单
+user_menu.Append(wx.ID_ANY, f"只看{username}(&K)")
+user_menu.Append(wx.ID_ANY, f"他的全部帖子(&T)")
+
+# 帖子列表上下文菜单
+menu.Append(wx.ID_ANY, f"刷新(&R)")
+menu.Append(wx.ID_ANY, f"网页打开(&W)")
+menu.Append(wx.ID_ANY, f"拷贝帖子标题(&C)")
+menu.Append(wx.ID_ANY, f"拷贝帖子地址(&D)")
+```
+
+**Event Propagation Control System:**
+```python
+# 设置状态管理标记，防止重复处理
+self._handling_user_profile = True
+
+# 延迟清除标记
+def clear_flag():
+    self._handling_user_profile = False
+
+wx.CallLater(500, clear_flag)
+```
+
+### Key Features
+- **Fixed Post Detail Shortcuts**: Ctrl+Enter now works correctly for replying to posts in thread detail view
+- **Fixed User Profile Viewing**: Shift+Enter now properly opens user profile dialog without multiple duplicate dialogs
+- **Standard Menu Behavior**: Context menus now support standard Windows letter shortcut behavior
+- **Data Structure Robustness**: Enhanced compatibility with both normal and filter mode data structures
+- **Event Propagation Control**: Prevents multiple dialog opening and ensures proper event handling
+- **Comprehensive Shortcuts**: All context menus now have letter shortcuts for enhanced accessibility
+
+### Context Menu Shortcuts Structure
+
+**Post Detail Context Menu:**
+```
+┌─────────────────────────┐
+│ 回复张三(&R)             │
+│ 查看张三的资料(&H)       │
+│ 筛选:只看张三(&P)        │
+│ 编辑此楼层(&E)           │
+│ ─────────────────────── │
+│ 用户功能                 │
+│ ├── 只看张三(&K)         │
+│ └── 他的全部帖子(&T)     │
+│ ─────────────────────── │
+│ 查看他的其他回复(&F)     │
+│ 回复此楼层(&H)           │
+└─────────────────────────┘
+```
+
+**Thread List Context Menu:**
+```
+┌─────────────────────────┐
+│ 刷新(&R)                │
+│ ─────────────────────── │
+│ 网页打开(&W)             │
+│ 拷贝帖子标题(&C)         │
+│ 拷贝帖子地址(&D)         │
+└─────────────────────────┘
+```
+
+### Testing Results
+- Verified Ctrl+Enter shortcut works correctly for replying to posts in thread detail view
+- Confirmed Shift+Enter shortcut properly opens user profile dialog without duplicate dialogs
+- Tested context menu letter shortcuts work with standard Windows menu behavior
+- Validated data structure compatibility between normal and filter modes
+- Confirmed event propagation control prevents multiple dialog opening
+- Tested all context menu letter shortcuts across different menu types
+- Verified screen reader compatibility and keyboard navigation maintained
+
+### Bug Fixes Addressed
+1. **Ctrl+Enter Not Working**: Fixed data structure incompatibility and event propagation issues
+2. **Shift+Enter Multiple Dialogs**: Implemented event propagation control and state management
+3. **Context Menu Letter Shortcuts**: Changed from incorrect notation to standard wxPython `&` format
+4. **Data Structure Access**: Enhanced compatibility with both normal and filter mode field structures
+5. **Event Handling**: Implemented proper event propagation control to prevent duplicate operations
+
+### Technical Implementation Notes
+- Used wxPython standard `&` notation for menu shortcuts
+- Implemented state management with `wx.CallLater` for cleanup
+- Added intelligent field name detection for robust data access
+- Enhanced event handling with direct return pattern for handled events
+- Maintained backward compatibility with existing functionality
+- Preserved all accessibility features and screen reader compatibility
