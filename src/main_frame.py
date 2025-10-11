@@ -791,8 +791,12 @@ class MainFrame(wx.Frame):
     def go_back_to_previous_list(self):
         """返回之前的列表"""
         try:
-            # 优先尝试恢复到保存的页面信息
-            if self.saved_page_info and self.restore_to_correct_page():
+            # 优先尝试恢复保存的完整列表状态（不刷新）
+            if hasattr(self, 'saved_list_state') and self.saved_list_state:
+                self.restore_saved_list_state()
+                return
+            # 其次尝试恢复到保存的页面信息
+            elif self.saved_page_info and self.restore_to_correct_page():
                 # 成功恢复到正确页面，现在恢复焦点
                 if self.saved_list_index != -1 and self.saved_list_index < self.list_ctrl.GetItemCount():
                     wx.CallAfter(self.reset_keyboard_cursor, self.saved_list_index)
@@ -1041,6 +1045,126 @@ class MainFrame(wx.Frame):
             pass
 
         return False
+
+    def restore_saved_list_state(self):
+        """恢复保存的列表状态（不刷新）"""
+        if not hasattr(self, 'saved_list_state') or not self.saved_list_state:
+            return False
+
+        try:
+            state = self.saved_list_state
+
+            # 恢复基本状态变量
+            self.current_content_type = state.get('current_content_type', 'thread_list')
+            self.current_forum = state.get('current_forum', '')
+            self.current_fid = state.get('current_fid')
+            self.current_keyword = state.get('current_keyword', '')
+            self.current_orderby = state.get('current_orderby', 'latest')
+            self.current_pagination = state.get('current_pagination', {})
+
+            # 恢复窗口标题
+            self.SetTitle(state.get('window_title', f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手"))
+
+            # 清空当前列表
+            self.list_ctrl.DeleteAllItems()
+            self.list_data.clear()
+
+            # 恢复列表数据
+            saved_list_data = state.get('list_data', [])
+            for item_data in saved_list_data:
+                if 'type' in item_data and item_data['type'] == 'pagination':
+                    # 处理分页控制
+                    action = item_data.get('action', '')
+                    pagination = state.get('current_pagination', {})
+                    current_page = pagination.get('page', 1)
+                    total_page = pagination.get('totalpage', 1)
+
+                    if action == 'prev':
+                        page = max(1, current_page - 1)
+                        display_text = f"上一页({page})"
+                    elif action == 'next':
+                        page = min(total_page, current_page + 1)
+                        display_text = f"下一页({page})"
+                    elif action == 'jump':
+                        display_text = f"当前第{current_page}页共{total_page}页，回车输入页码跳转"
+                    elif action == 'reply':
+                        display_text = f"回复帖子"
+                    else:
+                        display_text = f"分页控制"
+
+                    # 添加序号（如果启用）
+                    if hasattr(self, 'show_list_numbers') and self.show_list_numbers:
+                        total_items = len(saved_list_data)
+                        item_index = len(self.list_data)
+                        display_text += f" ，{item_index+1}之{total_items}项"
+
+                    # 清理文本并添加到列表
+                    import re
+                    display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                    display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                    display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                    display_text = re.sub(r';+\s*$', '', display_text)
+                    display_text = display_text.strip()
+
+                    self.list_ctrl.AppendItem([display_text])
+                    self.list_data.append({'type': 'pagination', 'action': action})
+
+                elif 'tid' in item_data:
+                    # 处理帖子项 - 使用与display_threads相同的逻辑
+                    if self.current_content_type in ['thread_list', 'search_result', 'user_threads', 'user_posts', 'home_content']:
+                        # 构建显示文本 - 使用与display_threads相同的格式
+                        subject = self.clean_html_tags(item_data.get('subject', ''))
+                        username = item_data.get('username', '')
+                        views = item_data.get('views', 0)
+                        forumname = item_data.get('forumname', '')
+                        dateline_fmt = item_data.get('dateline_fmt', '')
+                        posts = item_data.get('posts', 0)
+                        lastpost_fmt = item_data.get('lastpost_fmt', '')
+                        lastusername = item_data.get('lastusername', '')
+
+                        display_text = f"{subject} 作者:{username};浏览:{views};板块:{forumname};发表时间:{dateline_fmt};回复:{posts};回复时间:{lastpost_fmt};最后回复:{lastusername}"
+
+                        # 添加序号（如果启用）
+                        if hasattr(self, 'show_list_numbers') and self.show_list_numbers:
+                            total_items = len(saved_list_data)
+                            item_index = len(self.list_data)
+                            display_text += f" ，{item_index+1}之{total_items}项"
+
+                        # 清理HTML标签
+                        display_text = self.clean_html_tags(display_text)
+
+                        # 清理数据信息
+                        import re
+                        display_text = re.sub(r';?\s*数据:\s*\d+\s*', '', display_text)
+                        display_text = re.sub(r';?\s*data:\s*\d+\s*', '', display_text, flags=re.IGNORECASE)
+                        display_text = re.sub(r';\s*数据:\s*\d+.*$', '', display_text)
+                        display_text = re.sub(r';\s*data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                        display_text = re.sub(r'\s+数据:\s*\d+.*$', '', display_text)
+                        display_text = re.sub(r'\s+data:\s*\d+.*$', '', display_text, flags=re.IGNORECASE)
+                        display_text = re.sub(r';+\s*$', '', display_text)
+                        display_text = display_text.strip()
+
+                        self.list_ctrl.AppendItem([display_text])
+                        self.list_data.append(item_data)
+
+            # 恢复选中状态
+            selected_index = state.get('selected_index', 0)
+            if selected_index < self.list_ctrl.GetItemCount():
+                self.list_ctrl.SelectRow(selected_index)
+                wx.CallAfter(self.reset_keyboard_cursor, selected_index)
+
+            # 清除保存的状态，避免重复恢复
+            self.saved_list_state = None
+
+            return True
+
+        except Exception as e:
+            # 恢复失败时清除保存的状态
+            self.saved_list_state = None
+            return False
 
     def display_threads_and_restore_focus(self, threads, pagination=None, content_type='thread_list'):
         """显示帖子列表并恢复焦点"""
@@ -2060,10 +2184,18 @@ class MainFrame(wx.Frame):
             # 将帖子ID等信息存储在 list_data 数组中
             self.list_ctrl.AppendItem([display_text])
 
-            # 构建存储的数据
+            # 构建存储的数据 - 保存完整的帖子数据以便恢复时使用
             thread_data = {
                 'tid': thread.get('tid', 0),
-                'type': 'thread'
+                'type': 'thread',
+                'subject': subject,
+                'username': username,
+                'views': views,
+                'forumname': forumname,
+                'dateline_fmt': dateline_fmt,
+                'posts': posts,
+                'lastpost_fmt': lastpost_fmt,
+                'lastusername': lastusername
             }
 
             self.list_data.append(thread_data)
@@ -2262,9 +2394,13 @@ class MainFrame(wx.Frame):
 
     def load_thread_detail(self, tid):
         """加载帖子详情"""
+        self.load_thread_detail_and_restore_page(tid, 1)
+
+    def load_thread_detail_and_restore_page(self, tid, target_page=1, save_state=True):
+        """加载帖子详情并恢复到指定页面"""
         try:
-            # 保存当前状态，用于退格键返回
-            if hasattr(self, 'current_content_type'):
+            # 保存当前状态，用于退格键返回（仅在首次进入时保存）
+            if save_state and hasattr(self, 'current_content_type'):
                 self.previous_content_type = self.current_content_type
                 self.previous_content_params = {
                     'forum_name': getattr(self, 'current_forum', ''),
@@ -2289,8 +2425,29 @@ class MainFrame(wx.Frame):
                         'params': self.get_current_page_params()
                     }
 
+                # 保存完整的列表状态，用于退格键退出时直接恢复（不刷新）
+                if hasattr(self, 'list_ctrl') and hasattr(self, 'list_data'):
+                    # 保存当前列表的所有数据
+                    self.saved_list_state = {
+                        'list_data': self.list_data.copy(),  # 深拷贝列表数据
+                        'current_pagination': getattr(self, 'current_pagination', {}).copy(),
+                        'current_content_type': getattr(self, 'current_content_type', ''),
+                        'current_forum': getattr(self, 'current_forum', ''),
+                        'current_fid': getattr(self, 'current_fid', None),
+                        'current_keyword': getattr(self, 'current_keyword', ''),
+                        'current_orderby': getattr(self, 'current_orderby', 'latest'),
+                        'selected_index': selected if selected != -1 else 0,
+                        'window_title': self.GetTitle()
+                    }
+
             self.current_tid = tid
-            result = self.forum_client.get_thread_detail(self.current_forum, tid)
+
+            # 如果指定了目标页面且大于1，则加载指定页面
+            if target_page > 1:
+                result = self.forum_client.get_thread_detail(self.current_forum, tid, target_page)
+            else:
+                result = self.forum_client.get_thread_detail(self.current_forum, tid)
+
             posts = result.get('postlist', [])
             pagination = result.get('pagination', {})
             thread_info = result.get('thread_info', {})
@@ -3069,18 +3226,34 @@ class MainFrame(wx.Frame):
             if not hasattr(self, 'current_tid') or not self.current_tid:
                 return
 
+            # 保存当前页面状态，用于回复后恢复到相同页面
+            current_page = getattr(self, 'current_pagination', {}).get('page', 1)
+            current_tid = self.current_tid
+
             # 准备回复内容，转换换行符
             prepared_content = self.prepare_reply_content(content)
-            success = self.forum_client.post_reply(self.current_forum, self.current_tid, prepared_content)
-            if success:
-                wx.MessageBox("回复发送成功", "成功", wx.OK | wx.ICON_INFORMATION)
-                # 刷新当前页面
-                self.load_thread_detail(self.current_tid)
+
+            # 获取当前帖子的fid
+            if hasattr(self, 'current_thread_info') and self.current_thread_info:
+                fid = self.current_thread_info.get('fid')
             else:
-                wx.MessageBox("回复发送失败", "错误", wx.OK | wx.ICON_ERROR)
+                fid = None
+
+            if not fid:
+                wx.MessageBox("无法获取帖子信息", "错误", wx.OK | wx.ICON_ERROR)
+                return
+
+            result = self.forum_client.post_reply(self.current_forum, fid, current_tid, prepared_content)
+            if result.get('success'):
+                wx.MessageBox("回复发送成功", "成功", wx.OK | wx.ICON_INFORMATION)
+                # 刷新当前页面，并跳转到回复前的页面（不保存状态，避免覆盖之前的列表状态）
+                self.load_thread_detail_and_restore_page(current_tid, current_page, save_state=False)
+            else:
+                error_message = result.get('error', '回复发送失败')
+                wx.MessageBox(f"回复发送失败: {error_message}", "错误", wx.OK | wx.ICON_ERROR)
 
         except Exception as e:
-            wx.MessageBox("回复发送失败", "错误", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(f"回复发送失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
 
     def display_messages(self, messages):
         """显示消息列表（只显示用户名，隐藏消息内容） - DataViewListCtrl版本"""
@@ -3817,11 +3990,15 @@ class MainFrame(wx.Frame):
 
             reply_target = self.reply_target
 
+            # 保存当前页面状态，用于回复后恢复到相同页面
+            current_page = getattr(self, 'current_pagination', {}).get('page', 1)
+            current_tid = reply_target['tid']
+
             # 准备回复内容
             prepared_content = self.prepare_reply_content(content)
 
             # 调用回复API（使用新的参数格式）
-            success = self.forum_client.post_reply(
+            result = self.forum_client.post_reply(
                 self.current_forum,
                 reply_target['fid'],
                 reply_target['tid'],
@@ -3829,12 +4006,13 @@ class MainFrame(wx.Frame):
                 reply_target['pid']  # 关键：指定要回复的楼层
             )
 
-            if success:
+            if result.get('success'):
                 wx.MessageBox(f"回复{reply_target['username']}成功", "成功", wx.OK | wx.ICON_INFORMATION)
-                # 刷新当前页面
-                self.load_thread_detail(reply_target['tid'])
+                # 刷新当前页面，并跳转到回复前的页面（不保存状态，避免覆盖之前的列表状态）
+                self.load_thread_detail_and_restore_page(current_tid, current_page, save_state=False)
             else:
-                wx.MessageBox("回复发送失败", "错误", wx.OK | wx.ICON_ERROR)
+                error_message = result.get('error', '回复发送失败')
+                wx.MessageBox(f"回复发送失败: {error_message}", "错误", wx.OK | wx.ICON_ERROR)
 
         except Exception as e:
             wx.MessageBox(f"回复发送失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)

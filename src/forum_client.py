@@ -450,20 +450,20 @@ class ForumClient:
             pid: 帖子ID（可选，用于回复特定楼层）
 
         Returns:
-            bool: 是否发表成功
+            dict: 包含成功状态和错误信息的字典
         """
         session = self.auth_manager.get_session(forum_name)
         if not session:
-            return False
+            return {"success": False, "error": "无法获取会话信息"}
 
         forum_config = self.auth_manager.get_user_info(forum_name)
         if not forum_config:
-            return False
+            return {"success": False, "error": "无法获取论坛配置"}
 
         try:
             forum_url = forum_config.get('url', '')
             if not forum_url:
-                return False
+                return {"success": False, "error": "论坛URL为空"}
 
             post_url = f"{forum_url.rstrip('/')}/{API_ENDPOINTS['post_reply']}"
             data = {
@@ -480,12 +480,17 @@ class ForumClient:
             response = session.post(post_url, data=data)
             if response.status_code == 200:
                 result = response.json()
-                return result.get('status') == 1
+                if result.get('status') == 1:
+                    return {"success": True, "error": None}
+                else:
+                    # API返回错误信息
+                    error_message = result.get('message', '回复发送失败')
+                    return {"success": False, "error": error_message}
+            else:
+                return {"success": False, "error": f"HTTP错误: {response.status_code}"}
 
         except Exception as e:
-            pass
-
-        return False
+            return {"success": False, "error": f"网络异常: {str(e)}"}
 
     def get_message_list(self, forum_name):
         """
