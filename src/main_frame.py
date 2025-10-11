@@ -1635,11 +1635,12 @@ class MainFrame(wx.Frame):
                                                       self.current_api_params.get('typeid1'),
                                                       self.current_api_params.get('typeid2'))
             elif self.current_content_type == 'thread_detail':
-                # 重新加载帖子详情
+                # 重新加载帖子详情 - 使用save_state=False避免覆盖导航状态
                 if hasattr(self, 'current_thread_info') and self.current_thread_info:
                     tid = self.current_thread_info.get('tid')
+                    current_page = getattr(self, 'current_pagination', {}).get('page', 1)
                     if tid:
-                        self.load_thread_detail(tid)
+                        self.load_thread_detail_and_restore_page(tid, current_page, save_state=False)
             elif self.current_content_type == 'home_content':
                 # 重新加载首页内容
                 if hasattr(self, 'current_orderby'):
@@ -2442,11 +2443,8 @@ class MainFrame(wx.Frame):
 
             self.current_tid = tid
 
-            # 如果指定了目标页面且大于1，则加载指定页面
-            if target_page > 1:
-                result = self.forum_client.get_thread_detail(self.current_forum, tid, target_page)
-            else:
-                result = self.forum_client.get_thread_detail(self.current_forum, tid)
+            # 总是加载指定页面，确保刷新后保持在同一页
+            result = self.forum_client.get_thread_detail(self.current_forum, tid, target_page)
 
             posts = result.get('postlist', [])
             pagination = result.get('pagination', {})

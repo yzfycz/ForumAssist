@@ -1151,3 +1151,68 @@ def post_reply(self, forum_name, fid, tid, content, pid=None):
 3. **State Overwrite During Refresh**: Fixed issue where reply refresh operations would overwrite navigation state
 4. **Incomplete List Restoration**: Fixed issue where restored lists showed empty or incomplete thread information
 5. **Generic Error Messages**: Fixed issue where reply failures only showed generic "回复发送失败" without specific reasons
+
+25. **Thread Detail Refresh Page Position Fix (2025-10-11)**
+    - Fixed critical F5 refresh issue in thread detail where refreshing would return to page 1 regardless of current page
+    - Enhanced refresh logic to preserve current page position when refreshing thread detail content
+    - Implemented proper state management to prevent navigation state overwrite during refresh operations
+    - Improved user experience by maintaining browsing context during refresh operations
+
+### Key Technical Improvements (Thread Detail Refresh Fix)
+
+**Page Position Preservation:**
+- **Current Page Detection**: Enhanced refresh logic to capture current page number before API call
+- **API Parameter Correction**: Fixed API call to always pass target page parameter, ensuring correct page content retrieval
+- **State Management Control**: Added `save_state=False` parameter to prevent navigation state overwrite during refresh
+- **Consistent Behavior**: Ensured refresh operations maintain user's current browsing position
+
+**Refresh Flow Optimization:**
+- **Page Parameter Passing**: Modified `load_thread_detail_and_restore_page` to always use target page parameter
+- **API Call Consistency**: Ensured API calls always receive page parameter, eliminating default-to-page-1 behavior
+- **Navigation Integrity**: Maintained proper backspace navigation behavior while fixing refresh functionality
+- **User Context Preservation**: Kept users on the same page when refreshing multi-page thread details
+
+### Implementation Details
+
+**Fixed Refresh Logic:**
+```python
+# 修改前：当target_page为1时，不传递页面参数
+if target_page > 1:
+    result = self.forum_client.get_thread_detail(self.current_forum, tid, target_page)
+else:
+    result = self.forum_client.get_thread_detail(self.current_forum, tid)
+
+# 修改后：总是传递页面参数，确保刷新后保持在同一页
+result = self.forum_client.get_thread_detail(self.current_forum, tid, target_page)
+```
+
+**Enhanced Refresh Handler:**
+```python
+elif self.current_content_type == 'thread_detail':
+    # 重新加载帖子详情 - 使用save_state=False避免覆盖导航状态
+    if hasattr(self, 'current_thread_info') and self.current_thread_info:
+        tid = self.current_thread_info.get('tid')
+        current_page = getattr(self, 'current_pagination', {}).get('page', 1)
+        if tid:
+            self.load_thread_detail_and_restore_page(tid, current_page, save_state=False)
+```
+
+### Key Features
+- **Page Position Memory**: F5 refresh in thread detail maintains current page position
+- **Navigation State Integrity**: Backspace navigation continues to work correctly after refresh
+- **Consistent API Behavior**: API calls always receive proper page parameters
+- **User Experience Enhancement**: Users no longer lose their place when refreshing multi-page threads
+- **Backward Compatibility**: All existing functionality preserved while fixing refresh behavior
+
+### Testing Results
+- Verified F5 refresh on page 2+ of thread detail maintains current page position
+- Confirmed backspace navigation works correctly after refresh operations
+- Tested refresh behavior across different thread lengths and page numbers
+- Validated API parameter passing ensures correct content retrieval
+- Confirmed navigation state management prevents state overwrite issues
+- Tested compatibility with existing thread detail features (reply, user profile, etc.)
+
+### Bug Fixes Addressed
+1. **Refresh Page Position Loss**: Fixed issue where F5 refresh in thread detail would return to page 1
+2. **API Parameter Inconsistency**: Fixed API call to always pass page parameter for consistent behavior
+3. **Navigation State Overwrite**: Enhanced refresh logic to prevent navigation state corruption
