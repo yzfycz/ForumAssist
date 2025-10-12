@@ -686,8 +686,8 @@ class MainFrame(wx.Frame):
         if keycode == wx.WXK_BACK:
             # 退格键：优先处理筛选模式退出，然后是正常的返回逻辑
             if hasattr(self, 'filter_mode') and self.filter_mode:
-                # 退出筛选模式
-                self.exit_filter_mode()
+                # 筛选模式：直接返回帖子列表，不回到帖子详情
+                self.exit_filter_mode_to_list()
             elif hasattr(self, 'user_content_mode') and self.user_content_mode:
                 # 退出用户内容查看模式，返回之前的帖子详情
                 self.exit_user_content_mode()
@@ -793,6 +793,10 @@ class MainFrame(wx.Frame):
         try:
             # 优先尝试恢复保存的完整列表状态（不刷新）
             if hasattr(self, 'saved_list_state') and self.saved_list_state:
+                state = self.saved_list_state
+                content_type = state.get('current_content_type', '')
+
+                # 直接恢复保存的列表状态（不重新加载）
                 self.restore_saved_list_state()
                 return
             # 其次尝试恢复到保存的页面信息
@@ -1216,6 +1220,10 @@ class MainFrame(wx.Frame):
         try:
             if not selected_item.IsOk():
                 return
+
+            # 如果在筛选模式下，自动退出筛选
+            if hasattr(self, 'filter_mode') and self.filter_mode:
+                self.filter_mode = None
 
             text = self.tree_ctrl.GetItemText(selected_item)
 
@@ -2330,9 +2338,16 @@ class MainFrame(wx.Frame):
         current_page = pagination.get('page', 1)
         total_page = pagination.get('totalpage', 1)
 
+        # 检查是否在筛选模式下
+        is_filter_mode = hasattr(self, 'filter_mode') and self.filter_mode
+        filter_username = self.filter_mode.get('username', '') if is_filter_mode else ''
+
         # 1. 上一页控制项
         if current_page > 1:
-            prev_text = f"上一页({current_page - 1})"
+            if is_filter_mode:
+                prev_text = f"上一页({current_page - 1})（只看{filter_username}）"
+            else:
+                prev_text = f"上一页({current_page - 1})"
             # 应用数据清理逻辑，移除"数据: XXX"信息
             import re
             cleaned_text = re.sub(r';?\s*数据:\s*\d+\s*', '', prev_text)
@@ -2348,7 +2363,10 @@ class MainFrame(wx.Frame):
 
         # 2. 下一页控制项
         if current_page < total_page:
-            next_text = f"下一页({current_page + 1})"
+            if is_filter_mode:
+                next_text = f"下一页({current_page + 1})（只看{filter_username}）"
+            else:
+                next_text = f"下一页({current_page + 1})"
             # 应用数据清理逻辑，移除"数据: XXX"信息
             import re
             cleaned_text = re.sub(r';?\s*数据:\s*\d+\s*', '', next_text)
@@ -2363,7 +2381,10 @@ class MainFrame(wx.Frame):
             self.list_data.append({'type': 'pagination', 'action': 'next', 'page': current_page + 1})
 
         # 3. 当前页码跳转控制项
-        jump_text = f"第{current_page}页/共{total_page}页 (回车跳转)"
+        if is_filter_mode:
+            jump_text = f"第{current_page}页/共{total_page}页 (只看{filter_username}) (回车跳转)"
+        else:
+            jump_text = f"第{current_page}页/共{total_page}页 (回车跳转)"
         # 应用数据清理逻辑，移除"数据: XXX"信息
         import re
         cleaned_text = re.sub(r';?\s*数据:\s*\d+\s*', '', jump_text)
@@ -2469,6 +2490,15 @@ class MainFrame(wx.Frame):
                 return
 
             next_page = current_page + 1
+
+            # 检查是否在筛选模式下
+            if hasattr(self, 'filter_mode') and self.filter_mode:
+                # 筛选模式下的分页
+                uid = self.filter_mode.get('uid')
+                tid = self.filter_mode.get('original_tid')
+                if uid and tid:
+                    self.load_thread_detail_with_filter(tid, uid, page=next_page)
+                    return
 
             # 计算真实的页面号（考虑偏移）
             page_offset = self.current_pagination.get('page_offset', 0)
@@ -2813,6 +2843,15 @@ class MainFrame(wx.Frame):
 
             prev_page = current_page - 1
 
+            # 检查是否在筛选模式下
+            if hasattr(self, 'filter_mode') and self.filter_mode:
+                # 筛选模式下的分页
+                uid = self.filter_mode.get('uid')
+                tid = self.filter_mode.get('original_tid')
+                if uid and tid:
+                    self.load_thread_detail_with_filter(tid, uid, page=prev_page)
+                    return
+
             # 计算真实的页面号（考虑偏移）
             page_offset = self.current_pagination.get('page_offset', 0)
             real_prev_page = prev_page + page_offset
@@ -2992,6 +3031,15 @@ class MainFrame(wx.Frame):
     def jump_to_page(self, target_page):
         """跳转到指定页码"""
         try:
+            # 检查是否在筛选模式下
+            if hasattr(self, 'filter_mode') and self.filter_mode:
+                # 筛选模式下的分页
+                uid = self.filter_mode.get('uid')
+                tid = self.filter_mode.get('original_tid')
+                if uid and tid:
+                    self.load_thread_detail_with_filter(tid, uid, page=target_page)
+                    return
+
             # 计算真实的页面号（考虑偏移）
             page_offset = getattr(self, 'current_pagination', {}).get('page_offset', 0)
             real_target_page = target_page + page_offset
@@ -4411,6 +4459,8 @@ class MainFrame(wx.Frame):
         if not self.current_content_type == 'thread_detail' or not self.current_tid:
             return
 
+        # 不需要在这里重新保存列表状态，因为进入帖子详情时已经保存了
+
         # 保存当前状态，用于退格键返回
         self.previous_state = {
             'content_type': self.current_content_type,
@@ -4430,12 +4480,16 @@ class MainFrame(wx.Frame):
         # 重新加载帖子详情，带筛选参数
         self.load_thread_detail_with_filter(self.current_tid, uid)
 
-    def load_thread_detail_with_filter(self, tid, uid):
-        """加载筛选后的帖子详情 - 使用API筛选"""
+    def load_thread_detail_with_filter(self, tid, uid, page=None):
+        """加载筛选后的帖子详情 - 获取整页数据再前端筛选"""
         try:
-            # 获取当前页面的筛选帖子详情
-            current_page = getattr(self, 'current_page', 1)
-            result = self.forum_client.get_thread_detail(self.current_forum, tid, page=current_page, uid=uid)
+            # 获取目标页面的完整帖子详情（不带uid参数）
+            if page is None:
+                current_page = getattr(self, 'current_page', 1)
+            else:
+                current_page = page
+
+            result = self.forum_client.get_thread_detail(self.current_forum, tid, page=current_page)
 
             if 'postlist' in result and 'pagination' in result:
                 post_list = result.get('postlist', [])
@@ -4451,8 +4505,12 @@ class MainFrame(wx.Frame):
                 self.total_pages = page_info['total']
                 self.current_pagination = page_info
 
+                # 前端筛选出目标用户的回复
+                filter_username = self.filter_mode.get('username', '')
+                filtered_posts = [post for post in post_list if post.get('username', '') == filter_username]
+
                 # 显示筛选后的帖子
-                self.display_filtered_posts(post_list, thread_info, page_info)
+                self.display_filtered_posts(filtered_posts, post_list, thread_info, page_info)
 
                 # 更新窗口标题显示筛选状态
                 filter_username = self.filter_mode.get('username', '')
@@ -4475,39 +4533,39 @@ class MainFrame(wx.Frame):
             # 状态栏已移除，无需设置状态文本
             pass
 
-    def display_filtered_posts(self, post_list, thread_info, page_info):
-        """显示筛选后的帖子列表"""
+    def display_filtered_posts(self, filtered_posts, all_posts, thread_info, page_info):
+        """显示筛选后的帖子列表 - 保持原始楼层号和分页结构"""
         # 清空列表
         self.list_ctrl.DeleteAllItems()
         self.list_data.clear()
 
-        if not post_list:
-            self.show_info_message("该用户在此帖子中没有发表内容")
-            return
-
-        # 添加帖子项，使用简单的序号而不是原始楼层数
-        for i, post in enumerate(post_list):
+        # 添加筛选后的帖子项，保持原始楼层号（无论是否有内容都要显示分页）
+        for post in filtered_posts:
             try:
                 # 格式化帖子内容
                 username = post.get('username', '')
                 message = post.get('message', '')
                 dateline = post.get('dateline_fmt', '')
 
+                # 使用正确的楼层号字段名
+                floor_number = post.get('floor', 1)
+
                 # 清理HTML标签
                 clean_message = self.clean_html_tags(message)
 
-                # 构建显示文本，使用简单序号
-                if i == 0:
+                # 构建显示文本，保持原始楼层号
+                if floor_number == 1:
                     display_text = f"楼主 {username} 说\n{clean_message}\n发表时间：{dateline}"
                 else:
-                    display_text = f"{i+1}楼 {username} 说\n{clean_message}\n发表时间：{dateline}"
+                    display_text = f"{floor_number}楼 {username} 说\n{clean_message}\n发表时间：{dateline}"
 
                 # 添加到列表
                 index = self.list_ctrl.AppendItem([display_text])
                 self.list_data.append({
                     'type': 'post',
                     'data': post,
-                    'floor_index': i
+                    'floor_index': floor_number - 1,  # 保持原始楼层索引
+                    'post_data': post  # 兼容现有代码结构
                 })
 
             except Exception as e:
@@ -4537,6 +4595,21 @@ class MainFrame(wx.Frame):
 
         # 立即更新窗口标题，移除筛选状态
         self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
+
+    def exit_filter_mode_to_list(self):
+        """退出筛选模式，直接返回帖子列表"""
+        if not hasattr(self, 'filter_mode') or not self.filter_mode:
+            return
+
+        # 清除筛选模式
+        self.filter_mode = None
+
+        # 恢复窗口标题
+        self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
+
+        
+        # 直接返回到之前的列表状态
+        self.go_back_to_previous_list()
 
     def on_view_user_threads(self, username, uid):
         """查看用户的主题帖子"""

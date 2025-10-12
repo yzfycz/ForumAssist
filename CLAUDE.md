@@ -1216,3 +1216,91 @@ elif self.current_content_type == 'thread_detail':
 1. **Refresh Page Position Loss**: Fixed issue where F5 refresh in thread detail would return to page 1
 2. **API Parameter Inconsistency**: Fixed API call to always pass page parameter for consistent behavior
 3. **Navigation State Overwrite**: Enhanced refresh logic to prevent navigation state corruption
+
+26. **"只看他"筛选功能完整实现 (2025-10-12)**
+    - 实现了完整的用户回复筛选功能，支持按原帖子分页结构进行筛选浏览
+    - 保持原始楼层号显示（2楼、5楼、8楼等），不重新编号，维持用户对帖子结构的认知
+    - 实现了两种退出筛选模式的方式：退格键直接返回列表、树视图导航自动退出
+    - 优化了用户导航流程，减少了操作步骤，提升了整体使用体验
+
+### Key Technical Improvements ("只看他"筛选功能)
+
+**原分页结构保持：**
+- **前端筛选逻辑**：修改API调用方式，获取整页数据后在前端筛选目标用户回复
+- **分页信息准确**：使用原帖子的分页信息（第1页/共5页），不是筛选结果的分页
+- **楼层号完整性**：保持API返回的原始楼层号，用户能清楚知道回复在原帖子中的位置
+
+**界面体验优化：**
+- **空页面处理**：某页没有目标用户回复时，只显示分页控制，无干扰性提示
+- **窗口标题简化**：筛选模式下显示"论坛-<用户昵称>-论坛助手 (只看用户名)"，不显示帖子标题
+- **分页信息增强**：分页控制显示筛选状态，如"第1页/共5页（只看张三）"
+
+**导航流程优化：**
+- **直接返回列表**：筛选模式按退格键直接返回之前的帖子列表，无需经过帖子详情页面
+- **树视图自动退出**：点击树视图其他项目时自动退出筛选模式，加载新内容
+- **无刷新状态恢复**：返回列表时不重新调用API，保持原有位置和选中状态
+
+**状态管理增强：**
+- **完整状态保存**：利用现有的`saved_list_state`机制，在进入帖子详情时保存完整的列表状态
+- **智能状态恢复**：筛选模式退出时直接恢复保存的列表数据，避免数据丢失
+- **兼容性保障**：与现有的状态管理系统无缝集成，不影响其他功能
+
+### Implementation Details
+
+**前端筛选逻辑实现：**
+```python
+# 获取整页数据后在前端筛选
+result = self.forum_client.get_thread_detail(self.current_forum, tid, page=current_page)
+all_posts = result.get('postlist', [])
+
+# 前端筛选目标用户的回复
+filter_username = self.filter_mode.get('username', '')
+filtered_posts = [post for post in all_posts if post.get('username', '') == filter_username]
+```
+
+**楼层号保持实现：**
+```python
+# 使用API返回的原始楼层号字段
+floor_number = post.get('floor', 1)
+if floor_number == 1:
+    display_text = f"楼主 {username} 说\n{clean_message}\n发表时间：{dateline}"
+else:
+    display_text = f"{floor_number}楼 {username} 说\n{clean_message}\n发表时间：{dateline}"
+```
+
+**导航退出实现：**
+```python
+def exit_filter_mode_to_list(self):
+    """退出筛选模式，直接返回帖子列表"""
+    # 清除筛选模式
+    self.filter_mode = None
+
+    # 恢复窗口标题
+    self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
+
+    # 直接返回到之前的列表状态（无刷新）
+    self.go_back_to_previous_list()
+```
+
+### Key Features
+- **原分页结构**：完全按照原帖子的分页方式（1-20楼、21-40楼...）进行筛选浏览
+- **原始楼层号**：2楼就是2楼，不会重新编号，保持用户对帖子结构的认知
+- **高效导航**：筛选模式→退格键→直接返回列表，减少操作步骤
+- **无干扰体验**：空页面只显示分页控制，界面简洁一致
+- **状态保持**：返回列表时保持原有位置和选中项，无需重新加载
+
+### Testing Results
+- 验证筛选模式按原分页结构正确显示用户回复
+- 确认楼层号显示准确，保持原始编号（2楼、5楼、8楼等）
+- 测试退格键直接返回帖子列表，功能正常工作
+- 验证树视图导航自动退出筛选模式
+- 确认返回列表时保持原有状态，无数据丢失
+- 测试分页控制筛选模式正常工作（上一页/下一页/跳转页码）
+- 验证所有现有功能与筛选模式兼容性良好
+
+### User Experience Flow
+**完整操作流程：**
+1. 帖子列表 → 点击帖子 → 帖子详情（保存列表状态）
+2. 帖子详情 → 右键用户回复 → "只看张三" → 筛选模式
+3. 筛选模式：按原分页浏览（1-20楼：显示2、5、8楼；21-40楼：显示21、22、30楼；41-60楼：无回复，只显示分页控制）
+4. 筛选模式 → 按退格键 → 直接返回原帖子列表（无刷新，保持原位置）
