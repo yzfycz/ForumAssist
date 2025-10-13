@@ -3698,8 +3698,343 @@ class MainFrame(wx.Frame):
         except Exception as e:
             wx.MessageBox("消息发送失败", "错误", wx.OK | wx.ICON_ERROR)
 
+    def parse_floor_content_and_extract_resources(self, html_content):
+        """
+        解析楼层HTML内容，提取资源并生成清理后的文本
+        返回: (清理后的文本, 资源列表, 资源位置映射)
+
+        Args:
+            html_content: 包含HTML标签的楼层内容
+
+        Returns:
+            tuple: (清理后的文本, 资源列表, 资源位置映射字典)
+        """
+        if not html_content:
+            return '', [], {}
+
+        try:
+            # 资源列表和位置映射
+            resources = []
+            resource_map = {}
+
+            # 统一的资源名称生成函数
+            def generate_fallback_name(url, resource_type):
+                """为资源生成备用名称"""
+                try:
+                    if not url:
+                        return f'未命名{resource_type}'
+
+                    # 从URL中提取文件名
+                    if '/' in url:
+                        filename = url.split('/')[-1]
+                        if '?' in filename:  # 移除查询参数
+                            filename = filename.split('?')[0]
+                        if '#' in filename:  # 移除锚点
+                            filename = filename.split('#')[0]
+                        if filename:  # 如果有文件名
+                            # 移除文件扩展名
+                            if '.' in filename and resource_type != '链接':
+                                name_without_ext = filename.split('.')[0]
+                                return name_without_ext or f'未命名{resource_type}'
+                            return filename
+                        else:  # 如果URL以/结尾
+                            path_parts = url.strip('/').split('/')
+                            return path_parts[-1] if path_parts else f'未命名{resource_type}'
+                    else:
+                        return url or f'未命名{resource_type}'
+                except Exception:
+                    return f'未命名{resource_type}'
+
+            # 处理换行相关的HTML标签
+            # 将<br>、<br/>、<br />等替换为换行符
+            clean_text = re.sub(r'<br\s*/?>', '\n', html_content, flags=re.IGNORECASE)
+
+            # 只对结束标签替换为换行符，避免重复换行
+            clean_text = re.sub(r'</(p|div|h[1-6]|blockquote|li|tr|td|th)>', '\n', clean_text, flags=re.IGNORECASE)
+
+            # 移除开始标签（不添加换行符）
+            clean_text = re.sub(r'<(?!/)(p|div|h[1-6]|blockquote|li|tr|td|th)[^>]*>', '', clean_text, flags=re.IGNORECASE)
+
+            # 提取链接资源 <a href="url">text</a>
+            def extract_link(match):
+                try:
+                    groups = match.groups()
+                    url = groups[0] if groups[0] else ''
+                    text = groups[1].strip() if len(groups) > 1 and groups[1] else ''
+
+                    # 如果链接文字为空或只有空白字符，使用备用名称
+                    if not text:
+                        text = generate_fallback_name(url, '链接')
+
+                    resource_name = f"{text}【链接】"
+                    resource_info = {
+                        'name': text,
+                        'type': 'link',
+                        'url': url,
+                        'display_name': resource_name
+                    }
+                    resources.append(resource_info)
+                    return resource_name
+                except Exception:
+                    return match.group(0) if match else ""
+
+            # 提取音频资源 <audio controls src="url" title="title"></audio>
+            def extract_audio(match):
+                try:
+                    groups = match.groups()
+
+                    # 安全地获取src和title，处理不同的匹配模式
+                    if len(groups) >= 2:
+                        # 模式1和模式2：有两个捕获组 (src, title) 或 (title, src)
+                        src = groups[0] if groups[0] else groups[1]
+                        title = groups[1] if groups[1] else groups[0]
+                    else:
+                        # 模式3：只有一个捕获组 (src)
+                        src = groups[0] if groups[0] else ''
+                        title = None
+
+                    # 如果没有title或title为空，使用备用名称
+                    if not title:
+                        title = generate_fallback_name(src, '音频')
+
+                    resource_name = f"{title}【音频】"
+                    resource_info = {
+                        'name': title,
+                        'type': 'audio',
+                        'url': src,
+                        'display_name': resource_name
+                    }
+                    resources.append(resource_info)
+                    return resource_name
+                except Exception:
+                    return match.group(0) if match else ""
+
+            # 提取图片资源 <img alt="alt" src="src"> 或 <img src="src" alt="alt">
+            def extract_image(match):
+                try:
+                    groups = match.groups()
+
+                    # 安全地获取src和alt，处理不同的匹配模式
+                    if len(groups) >= 2:
+                        # 模式1和模式2：有两个捕获组 (alt, src) 或 (src, alt)
+                        src = groups[0] if groups[0] else groups[1]
+                        alt = groups[1] if groups[1] else groups[0]
+                    else:
+                        # 模式3：只有一个捕获组 (src)
+                        src = groups[0] if groups[0] else ''
+                        alt = None
+
+                    # 如果没有alt或alt为空，使用备用名称
+                    if not alt:
+                        alt = generate_fallback_name(src, '图片')
+
+                    resource_name = f"{alt}【图片】"
+                    resource_info = {
+                        'name': alt,
+                        'type': 'image',
+                        'url': src,
+                        'display_name': resource_name
+                    }
+                    resources.append(resource_info)
+                    return resource_name
+                except Exception:
+                    return match.group(0) if match else ""
+
+          # 提取链接
+            # 改进的链接正则表达式，确保文字组总是存在（即使是空的）
+            link_pattern = r'<a\s+[^>]*href\s*=\s*["\']([^"\']+)["\'][^>]*>([^<]*)</a>'
+            clean_text = re.sub(link_pattern, extract_link, clean_text, flags=re.IGNORECASE)
+
+            # 提取音频（处理三种常见格式）
+            # 第一种格式：src在前，title在后
+            pattern1 = r'<audio\s+[^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*title\s*=\s*["\']([^"\']+)["\'][^>]*>.*?</audio>'
+            clean_text = re.sub(pattern1, extract_audio, clean_text, flags=re.IGNORECASE | re.DOTALL)
+
+            # 第二种格式：title在前，src在后
+            pattern2 = r'<audio\s+[^>]*title\s*=\s*["\']([^"\']+)["\'][^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*>.*?</audio>'
+            clean_text = re.sub(pattern2, extract_audio, clean_text, flags=re.IGNORECASE | re.DOTALL)
+
+            # 第三种格式：只有src
+            pattern3 = r'<audio\s+[^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*>.*?</audio>'
+            clean_text = re.sub(pattern3, lambda m: extract_audio(m), clean_text, flags=re.IGNORECASE | re.DOTALL)
+
+            # 提取图片（处理三种常见格式）
+            # 第一种格式：alt在前，src在后
+            img_pattern1 = r'<img\s+[^>]*alt\s*=\s*["\']([^"\']*)["\'][^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*>'
+            clean_text = re.sub(img_pattern1, extract_image, clean_text, flags=re.IGNORECASE)
+
+            # 第二种格式：src在前，alt在后
+            img_pattern2 = r'<img\s+[^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*alt\s*=\s*["\']([^"\']*)["\'][^>]*>'
+            clean_text = re.sub(img_pattern2, extract_image, clean_text, flags=re.IGNORECASE)
+
+            # 第三种格式：只有src
+            img_pattern3 = r'<img\s+[^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*>'
+            clean_text = re.sub(img_pattern3, lambda m: extract_image(m), clean_text, flags=re.IGNORECASE)
+
+            # 移除剩余的HTML标签
+            clean_text = re.sub(r'<[^>]+>', '', clean_text)
+
+            # 处理HTML实体
+            html_entities = {
+                '&nbsp;': ' ',
+                '&lt;': '<',
+                '&gt;': '>',
+                '&amp;': '&',
+                '&quot;': '"',
+                '&apos;': "'",
+                '&copy;': '©',
+                '&reg;': '®',
+                '&hellip;': '…',
+                '&ndash;': '–',
+                '&mdash;': '—',
+                '&lsquo;': ''',
+                '&rsquo;': ''',
+                '&ldquo;': '"',
+                '&rdquo;': '"',
+                '&euro;': '€',
+                '&pound;': '£',
+                '&yen;': '¥'
+            }
+
+            for entity, char in html_entities.items():
+                clean_text = clean_text.replace(entity, char)
+
+            # 建立资源位置映射
+            current_pos = 0
+            for i, resource in enumerate(resources):
+                resource_name = resource['display_name']
+                pos = clean_text.find(resource_name, current_pos)
+                if pos != -1:
+                    resource_map[pos] = resource
+                    current_pos = pos + len(resource_name)
+
+            # 清理多余的空行和空格
+            # 将多个连续换行符合并为单个换行符
+            clean_text = re.sub(r'\n+', '\n', clean_text)
+
+            # 清理首尾空白
+            clean_text = clean_text.strip()
+
+            return clean_text, resources, resource_map
+
+        except Exception as e:
+            # 如果整个解析过程失败，返回基础的HTML清理结果
+            print(f"[DEBUG] HTML解析整体失败，使用基础清理: {e}")
+            clean_text = self.clean_html_tags(html_content)
+            return clean_text, [], {}
+
+    def find_resource_near_cursor(self, text, cursor_pos, resources):
+        """
+        基于改进的位置和关键词检测光标附近的资源
+
+        Args:
+            text: 文本框中的完整文本
+            cursor_pos: 光标位置
+            resources: 资源列表
+
+        Returns:
+            dict or None: 找到的资源信息，如果没找到返回None
+        """
+        if not text or not resources:
+            return None
+
+        # 缩小检测范围：光标位置前后各20个字符（原来是50）
+        search_range = 20
+        start_pos = max(0, cursor_pos - search_range)
+        end_pos = min(len(text), cursor_pos + search_range)
+        context_text = text[start_pos:end_pos]
+
+        # 使用正则表达式匹配资源标记
+        resource_pattern = r'([^\【\】\n\r，。！？；：""''（）《》【】]+)\【(链接|音频|图片)\】'
+
+        # 在上下文中查找所有匹配的资源标记
+        matches = list(re.finditer(resource_pattern, context_text))
+
+        if not matches:
+            return None
+
+        # 如果只有一个匹配，直接返回
+        if len(matches) == 1:
+            match = matches[0]
+            resource_name = match.group(1).strip()
+            resource_type = match.group(2)
+        else:
+            # 多个匹配时，选择距离光标最近的
+            closest_match = None
+            min_distance = float('inf')
+
+            for match in matches:
+                # 计算匹配在原文中的位置
+                match_start_in_context = match.start()
+                match_start_in_text = start_pos + match_start_in_context
+
+                # 计算距离光标的距离
+                distance = abs(match_start_in_text - cursor_pos)
+
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_match = match
+
+            if closest_match:
+                resource_name = closest_match.group(1).strip()
+                resource_type = closest_match.group(2)
+            else:
+                return None
+
+        # 将中文类型转换为英文
+        type_mapping = {'链接': 'link', '音频': 'audio', '图片': 'image'}
+        resource_type_en = type_mapping.get(resource_type, 'unknown')
+
+        # 在资源列表中查找匹配的资源
+        for resource in resources:
+            if (resource['name'] == resource_name and
+                resource['type'] == resource_type_en):
+                return resource
+
+        return None
+
+    def open_resource(self, resource):
+        """
+        打开资源文件
+
+        Args:
+            resource: 资源信息字典，包含类型和URL
+        """
+        # 添加状态标记防止重复打开
+        if hasattr(self, '_opening_resource') and self._opening_resource:
+            return
+
+        try:
+            self._opening_resource = True
+
+            url = resource['url']
+            resource_type = resource['type']
+
+            if resource_type == 'link':
+                # 链接使用浏览器打开
+                webbrowser.open(url)
+            elif resource_type == 'audio':
+                # 音频使用系统默认播放器打开
+                webbrowser.open(url)
+            elif resource_type == 'image':
+                # 图片使用系统默认查看器打开
+                webbrowser.open(url)
+            else:
+                # 其他类型也尝试用浏览器打开
+                webbrowser.open(url)
+
+        except Exception as e:
+            try:
+                wx.MessageBox(f"无法打开资源 {resource['name']}：{str(e)}",
+                            "错误", wx.OK | wx.ICON_ERROR)
+            except:
+                pass
+        finally:
+            # 清除状态标记
+            self._opening_resource = False
+
     def show_floor_editor(self, floor_index):
-        """显示楼层内容浏览框"""
+        """显示楼层内容浏览框（增强版：支持资源显示和交互）"""
         try:
             # 检查是否已有对话框打开
             if hasattr(self, '_floor_dialog_open') and self._floor_dialog_open:
@@ -3713,11 +4048,21 @@ class MainFrame(wx.Frame):
             username = post.get('username', '')
             floor = floor_index + 1
 
+            # 解析HTML内容并提取资源（带异常处理）
+            try:
+                clean_text, resources, resource_map = self.parse_floor_content_and_extract_resources(original_content)
+            except Exception as e:
+                # 如果解析失败，使用基础的HTML清理
+                print(f"[DEBUG] HTML解析失败，使用基础清理: {e}")
+                clean_text = self.clean_html_tags(original_content)
+                resources = []
+                resource_map = {}
+
             # 设置对话框状态为打开
             self._floor_dialog_open = True
 
-            # 创建浏览对话框
-            dialog = wx.Dialog(self, title=f"浏览{floor}楼 - {username}", size=(600, 400))
+                      # 创建浏览对话框 - 增大尺寸以容纳资源列表
+            dialog = wx.Dialog(self, title=f"浏览{floor}楼 - {username}", size=(700, 500))
 
             # 创建主sizer用于dialog
             main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -3729,9 +4074,33 @@ class MainFrame(wx.Frame):
             info_label = wx.StaticText(panel, label=f"{floor}楼 {username} 的内容:")
             sizer.Add(info_label, 0, wx.ALL | wx.EXPAND, 5)
 
-            # 内容显示框（只读，不自动换行）
-            content_ctrl = wx.TextCtrl(panel, value=original_content, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
+            # 内容显示框（只读，不自动换行）- 使用清理后的文本
+            content_ctrl = wx.TextCtrl(panel, value=clean_text, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
             sizer.Add(content_ctrl, 1, wx.ALL | wx.EXPAND, 5)
+
+            # 资源列表（如果有资源）
+            resource_list_ctrl = None
+            if resources:
+                # 资源列表标题
+                resource_label = wx.StaticText(panel, label="资源:")
+                sizer.Add(resource_label, 0, wx.ALL | wx.EXPAND, 5)
+
+                # 创建资源列表
+                resource_list_ctrl = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+                resource_list_ctrl.InsertColumn(0, "序号", width=50)
+                resource_list_ctrl.InsertColumn(1, "资源名称", width=300)
+                resource_list_ctrl.InsertColumn(2, "类型", width=80)
+
+                # 添加资源数据
+                resource_data = []
+                for i, resource in enumerate(resources):
+                    type_text = {'link': '链接', 'audio': '音频', 'image': '图片'}.get(resource['type'], '其他')
+                    index = resource_list_ctrl.InsertItem(i, str(i+1))
+                    resource_list_ctrl.SetItem(index, 1, resource['name'])
+                    resource_list_ctrl.SetItem(index, 2, type_text)
+                    resource_data.append(resource)
+
+                sizer.Add(resource_list_ctrl, 0, wx.ALL | wx.EXPAND, 5)
 
             # 按钮面板
             button_panel = wx.Panel(panel)
@@ -3746,12 +4115,86 @@ class MainFrame(wx.Frame):
             dialog.SetSizerAndFit(main_sizer)
 
             # 绑定键盘事件
-            def on_char(event):
+            def on_content_key_down(event):
                 keycode = event.GetKeyCode()
+
                 if keycode == wx.WXK_ESCAPE or keycode == wx.WXK_BACK:
                     dialog.EndModal(wx.ID_CANCEL)
-                else:
-                    event.Skip()
+                    return
+
+                if keycode == wx.WXK_RETURN:
+                    # 基于关键词检测资源（方案A）
+                    cursor_pos = content_ctrl.GetInsertionPoint()
+                    full_text = content_ctrl.GetValue()
+
+                    # 改进的精确位置匹配逻辑
+                    # 1. 首先尝试精确位置匹配
+                    if cursor_pos in resource_map:
+                        resource = resource_map[cursor_pos]
+                        self.open_resource(resource)
+                        return
+
+                    # 2. 如果没有精确匹配，尝试查找附近的位置
+                    # 找到距离光标最近的资源位置
+                    nearest_pos = None
+                    min_distance = float('inf')
+                    nearest_resource = None
+
+                    for pos, resource in resource_map.items():
+                        distance = abs(pos - cursor_pos)
+                        if distance < min_distance:
+                            min_distance = distance
+                            nearest_pos = pos
+                            nearest_resource = resource
+
+                    # 如果最近的资源在合理范围内（10个字符内），使用它
+                    if nearest_resource is not None and min_distance <= 10:
+                        self.open_resource(nearest_resource)
+                        return
+
+                    # 3. 如果位置匹配失败，使用改进的关键词检测
+                    found_resource = self.find_resource_near_cursor(full_text, cursor_pos, resources)
+                    if found_resource:
+                        self.open_resource(found_resource)
+                        return
+                    return
+
+                if keycode == wx.WXK_TAB:
+                    # Tab键切换到资源列表（如果存在）
+                    if resource_list_ctrl:
+                        resource_list_ctrl.SetFocus()
+                    return
+
+                event.Skip()
+
+            def on_resource_key_down(event):
+                keycode = event.GetKeyCode()
+
+                if keycode == wx.WXK_ESCAPE or keycode == wx.WXK_BACK:
+                    dialog.EndModal(wx.ID_CANCEL)
+                    return
+
+                if keycode == wx.WXK_RETURN:
+                    # 激活选中的资源
+                    selected_index = resource_list_ctrl.GetFirstSelected()
+                    if selected_index >= 0 and selected_index < len(resource_data):
+                        resource = resource_data[selected_index]
+                        self.open_resource(resource)
+                    return
+
+                if keycode == wx.WXK_TAB:
+                    # Tab键切换到内容框
+                    content_ctrl.SetFocus()
+                    return
+
+                event.Skip()
+
+            # 资源列表双击激活事件
+            def on_resource_activated(event):
+                selected_index = resource_list_ctrl.GetFirstSelected()
+                if selected_index >= 0 and selected_index < len(resource_data):
+                    resource = resource_data[selected_index]
+                    self.open_resource(resource)
 
             # 对话框关闭事件处理
             def on_dialog_close(event):
@@ -3762,11 +4205,233 @@ class MainFrame(wx.Frame):
             def on_close_button(event):
                 dialog.EndModal(wx.ID_CANCEL)
 
-            content_ctrl.Bind(wx.EVT_CHAR, on_char)
+            # 资源列表上下文菜单处理
+            def on_resource_context_menu(event):
+                """处理资源列表右键菜单"""
+                if not resource_list_ctrl or not resource_data:
+                    event.Skip()
+                    return
+
+                # 获取点击位置的项目索引
+                pos = event.GetPosition()
+                item_index, flags = resource_list_ctrl.HitTest(pos)
+
+                if item_index >= 0 and item_index < len(resource_data):
+                    # 选中该项目
+                    resource_list_ctrl.Select(item_index)
+
+                    # 创建上下文菜单
+                    menu = wx.Menu()
+
+                    # 添加菜单项
+                    copy_title_item = menu.Append(wx.ID_ANY, "拷贝标题(&C)\tCtrl+C")
+                    copy_url_item = menu.Append(wx.ID_ANY, "拷贝地址(&D)\tCtrl+D")
+
+                    # 绑定菜单事件
+                    def on_copy_title(menu_event):
+                        if item_index >= 0 and item_index < len(resource_data):
+                            resource = resource_data[item_index]
+                            title = resource['name']
+                            self.copy_to_clipboard(title)
+
+                    def on_copy_url(menu_event):
+                        if item_index >= 0 and item_index < len(resource_data):
+                            resource = resource_data[item_index]
+                            url = resource['url']
+                            self.copy_to_clipboard(url)
+
+                    # 绑定事件处理器
+                    dialog.Bind(wx.EVT_MENU, on_copy_title, copy_title_item)
+                    dialog.Bind(wx.EVT_MENU, on_copy_url, copy_url_item)
+
+                    # 显示菜单
+                    resource_list_ctrl.PopupMenu(menu, pos)
+                    menu.Destroy()
+                else:
+                    event.Skip()
+
+            # 资源列表键盘快捷键处理
+            def on_resource_key_down_with_shortcuts(event):
+                """处理资源列表键盘事件，包括快捷键"""
+                keycode = event.GetKeyCode()
+
+                # 添加调试信息（可以移除）
+                # print(f"资源列表键盘事件: {keycode}, Ctrl: {event.ControlDown()}")
+
+                if keycode == wx.WXK_ESCAPE or keycode == wx.WXK_BACK:
+                    dialog.EndModal(wx.ID_CANCEL)
+                    return
+
+                # Ctrl+C: 拷贝标题
+                if event.ControlDown() and keycode == ord('C'):
+                    selected_index = resource_list_ctrl.GetFirstSelected()
+                    if selected_index >= 0 and selected_index < len(resource_data):
+                        resource = resource_data[selected_index]
+                        title = resource['name']
+                        self.copy_to_clipboard(title)
+                    return
+
+                # Ctrl+D: 拷贝地址
+                if event.ControlDown() and keycode == ord('D'):
+                    selected_index = resource_list_ctrl.GetFirstSelected()
+                    if selected_index >= 0 and selected_index < len(resource_data):
+                        resource = resource_data[selected_index]
+                        url = resource['url']
+                        self.copy_to_clipboard(url)
+                    return
+
+                # Application Key (上下文菜单键): 触发上下文菜单
+                if keycode == wx.WXK_WINDOWS_MENU:
+                    # 检查是否有选中的资源
+                    selected_index = resource_list_ctrl.GetFirstSelected()
+                    if selected_index < 0:
+                        # 如果没有选中任何项目，选中第一个
+                        if resource_data:
+                            selected_index = 0
+                            resource_list_ctrl.Select(selected_index)
+
+                    if selected_index >= 0 and selected_index < len(resource_data):
+                        # 创建上下文菜单
+                        menu = wx.Menu()
+
+                        # 添加菜单项
+                        copy_title_item = menu.Append(wx.ID_ANY, "拷贝标题(&C)\tCtrl+C")
+                        copy_url_item = menu.Append(wx.ID_ANY, "拷贝地址(&D)\tCtrl+D")
+
+                        # 绑定菜单事件
+                        def on_copy_title(menu_event):
+                            if selected_index >= 0 and selected_index < len(resource_data):
+                                resource = resource_data[selected_index]
+                                title = resource['name']
+                                self.copy_to_clipboard(title)
+
+                        def on_copy_url(menu_event):
+                            if selected_index >= 0 and selected_index < len(resource_data):
+                                resource = resource_data[selected_index]
+                                url = resource['url']
+                                self.copy_to_clipboard(url)
+
+                        # 绑定事件处理器
+                        dialog.Bind(wx.EVT_MENU, on_copy_title, copy_title_item)
+                        dialog.Bind(wx.EVT_MENU, on_copy_url, copy_url_item)
+
+                        # 获取选中项目的显示位置
+                        item_rect = resource_list_ctrl.GetItemRect(selected_index)
+                        menu_pos = item_rect.GetBottomLeft()
+                        menu_pos.y += 5  # 稍微向下偏移
+
+                        # 显示菜单
+                        resource_list_ctrl.PopupMenu(menu, menu_pos)
+                        menu.Destroy()
+                    return
+
+                if keycode == wx.WXK_RETURN:
+                    # 激活选中的资源
+                    selected_index = resource_list_ctrl.GetFirstSelected()
+                    if selected_index >= 0 and selected_index < len(resource_data):
+                        resource = resource_data[selected_index]
+                        # 使用wx.CallAfter延迟执行，避免与列表激活事件冲突
+                        wx.CallAfter(self.open_resource, resource)
+                    return
+
+                if keycode == wx.WXK_TAB:
+                    # Tab键切换到内容框
+                    content_ctrl.SetFocus()
+                    return
+
+                event.Skip()
+
+            # 资源列表右键事件处理（备选方案）
+            def on_resource_right_click(event):
+                """处理资源列表右键点击事件"""
+                if not resource_list_ctrl or not resource_data:
+                    event.Skip()
+                    return
+
+                # 获取点击位置的项目索引
+                pos = event.GetPosition()
+                item_index, flags = resource_list_ctrl.HitTest(pos)
+
+                if item_index >= 0 and item_index < len(resource_data):
+                    # 选中该项目
+                    resource_list_ctrl.Select(item_index)
+
+                    # 创建上下文菜单
+                    menu = wx.Menu()
+
+                    # 添加菜单项
+                    copy_title_item = menu.Append(wx.ID_ANY, "拷贝标题(&C)\tCtrl+C")
+                    copy_url_item = menu.Append(wx.ID_ANY, "拷贝地址(&D)\tCtrl+D")
+
+                    # 绑定菜单事件
+                    def on_copy_title(menu_event):
+                        if item_index >= 0 and item_index < len(resource_data):
+                            resource = resource_data[item_index]
+                            title = resource['name']
+                            self.copy_to_clipboard(title)
+
+                    def on_copy_url(menu_event):
+                        if item_index >= 0 and item_index < len(resource_data):
+                            resource = resource_data[item_index]
+                            url = resource['url']
+                            self.copy_to_clipboard(url)
+
+                    # 绑定事件处理器
+                    dialog.Bind(wx.EVT_MENU, on_copy_title, copy_title_item)
+                    dialog.Bind(wx.EVT_MENU, on_copy_url, copy_url_item)
+
+                    # 显示菜单
+                    resource_list_ctrl.PopupMenu(menu, pos)
+                    menu.Destroy()
+                else:
+                    event.Skip()
+
+            # 绑定事件
+            content_ctrl.Bind(wx.EVT_CHAR, on_content_key_down)
+            if resource_list_ctrl:
+                resource_list_ctrl.Bind(wx.EVT_CHAR, on_resource_key_down_with_shortcuts)
+                resource_list_ctrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, on_resource_activated)
+                resource_list_ctrl.Bind(wx.EVT_CONTEXT_MENU, on_resource_context_menu)
+                resource_list_ctrl.Bind(wx.EVT_RIGHT_UP, on_resource_right_click)  # 添加右键事件
             close_button.Bind(wx.EVT_BUTTON, on_close_button)
             dialog.Bind(wx.EVT_CLOSE, on_dialog_close)
 
-            # 使用wx.CallAfter设置焦点
+            # 创建加速器表来处理快捷键
+            if resource_list_ctrl and resource_data:
+                # 创建加速器条目
+                accel_entries = [
+                    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('C'), 1001),  # Ctrl+C: 拷贝标题
+                    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('D'), 1002),  # Ctrl+D: 拷贝地址
+                ]
+                accel_table = wx.AcceleratorTable(accel_entries)
+                dialog.SetAcceleratorTable(accel_table)
+
+                # 绑定加速器事件
+                def on_accelerator(event):
+                    """处理加速器事件"""
+                    accel_id = event.GetId()
+
+                    if accel_id == 1001:  # Ctrl+C: 拷贝标题
+                        selected_index = resource_list_ctrl.GetFirstSelected()
+                        if selected_index >= 0 and selected_index < len(resource_data):
+                            resource = resource_data[selected_index]
+                            title = resource['name']
+                            self.copy_to_clipboard(title)
+                        return
+
+                    elif accel_id == 1002:  # Ctrl+D: 拷贝地址
+                        selected_index = resource_list_ctrl.GetFirstSelected()
+                        if selected_index >= 0 and selected_index < len(resource_data):
+                            resource = resource_data[selected_index]
+                            url = resource['url']
+                            self.copy_to_clipboard(url)
+                        return
+
+                    event.Skip()
+
+                dialog.Bind(wx.EVT_MENU, on_accelerator)
+
+            # 使用wx.CallAfter设置焦点到内容框
             wx.CallAfter(content_ctrl.SetFocus)
 
             try:
