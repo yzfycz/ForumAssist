@@ -1405,3 +1405,104 @@ def extract_audio(match):
 3. **状态重置失败**：修复了异常情况下状态标志未正确重置的问题
 4. **调试输出噪音**：移除了所有冗余的调试print语句
 5. **异常传播**：修复了异常处理不当导致的问题传播
+
+28. **用户内容导航完整实现 (2025-10-15)**
+    - 实现了完整的用户内容导航体系，支持多层级导航和状态管理
+    - 修复了用户内容退出时的焦点位置和页面位置保持问题
+    - 实现了从用户内容打开帖子后的正确返回逻辑，支持页面位置和焦点记忆
+    - 增强了导航状态管理，确保在用户内容中的多次操作不会覆盖原始导航状态
+    - 统一了窗口标题格式，保持原有的"论坛名字-<用户名>-论坛助手"格式
+    - 实现了从用户内容第二页或更高页面的精确返回功能
+
+### Key Technical Improvements (用户内容导航完整实现)
+
+**导航状态管理增强：**
+- **键盘事件处理优先级修复**：修复了键盘事件处理中的优先级冲突问题，确保从用户内容进入的帖子详情能正确返回用户内容列表
+- **状态保存机制完善**：实现了 `user_content_state_before_thread` 状态保存，记录用户内容模式、页码、焦点位置等信息
+- **原始状态保护**：在 `user_content_state_before_thread` 中保存 `original_thread_state`，避免多次用户内容操作覆盖原始帖子详情状态
+
+**用户内容加载方法增强：**
+- **页码参数支持**：修改 `load_user_threads_and_restore_focus` 和 `load_user_posts_and_restore_focus` 方法，支持指定页码参数
+- **页面位置记忆**：从用户内容的第N页打开帖子后，返回时能正确回到第N页，而不是总是回到第1页
+- **焦点位置保持**：保存和恢复用户内容列表中的选中项位置，提供精确的焦点管理
+
+**返回逻辑完整实现：**
+- **多层返回支持**：帖子详情 → 用户内容 → 帖子详情 → 用户内容 → 退格键 → 用户内容列表 → 退格键 → 原始帖子详情
+- **状态切换机制**：实现了 `load_thread_detail_from_user_content` 方法，清除 `user_content_mode` 避免键盘事件处理冲突
+- **页面和焦点恢复**：`return_to_user_content` 方法支持同时恢复页面位置和焦点位置
+
+### Implementation Details
+
+**状态保存结构：**
+```python
+self.user_content_state_before_thread = {
+    'user_content_mode': getattr(self, 'user_content_mode', None),
+    'current_content_type': getattr(self, 'current_content_type', ''),
+    'current_uid': getattr(self, 'current_uid', None),
+    'selected_index': self.list_ctrl.GetSelectedRow() if self.list_ctrl.GetSelectedRow() != -1 else 0,
+    'current_page': getattr(self, 'current_pagination', {}).get('page', 1),
+    'original_thread_state': getattr(self, 'previous_state', None)  # 保存原始状态
+}
+```
+
+**键盘事件处理修复：**
+```python
+def load_thread_detail_from_user_content(self, tid):
+    # 保存状态后立即清除 user_content_mode，避免键盘事件处理冲突
+    self.user_content_state_before_thread = {...}
+    self.user_content_mode = None  # 关键修复点
+    self.load_thread_detail_and_restore_page(tid, 1, save_state=False)
+```
+
+**用户内容加载方法增强：**
+```python
+def load_user_threads_and_restore_focus(self, uid, page=1):
+    # 新增页码参数支持
+    result = self.forum_client.get_user_threads(self.current_forum, uid, page=page)
+    # ... 其他逻辑保持不变
+
+def load_user_posts_and_restore_focus(self, uid, page=1):
+    # 新增页码参数支持
+    result = self.forum_client.get_user_posts(self.current_forum, uid, page=page)
+    # ... 其他逻辑保持不变
+```
+
+**返回逻辑完整实现：**
+```python
+def return_to_user_content(self):
+    # 使用保存的原始状态，而不是当前状态
+    original_thread_state = state.get('original_thread_state')
+    if original_thread_state:
+        self.previous_state = original_thread_state
+
+    # 恢复到指定页面和焦点
+    target_page = state.get('current_page', 1)
+    selected_index = state.get('selected_index', 0)
+
+    if content_type == 'user_threads':
+        self.load_user_threads_and_restore_focus(uid, page=target_page)
+    elif content_type == 'user_posts':
+        self.load_user_posts_and_restore_focus(uid, page=target_page)
+```
+
+### Key Features
+- **完整导航支持**：支持 帖子列表 → 帖子详情 → 用户内容 → 帖子详情 → 用户内容 → 退格键 → 用户内容列表 → 退格键 → 原始帖子详情 的完整导航流程
+- **页面位置记忆**：从用户内容的任何页面打开帖子，返回时都能精确回到原来的页面
+- **焦点位置保持**：在用户内容列表中选中的项目位置会被保存和恢复
+- **状态保护机制**：多次在用户内容中操作不会覆盖原始帖子详情状态
+- **标题格式统一**：保持原有的"论坛名字-<用户名>-论坛助手"格式，仅在用户内容时添加括号标识
+
+### Testing Results
+- 验证了完整的用户内容导航流程，所有退格键操作都能正确工作
+- 确认了从用户内容第二页及更高页面的精确返回功能
+- 测试了多次在用户内容中打开不同帖子后的状态保持
+- 验证了窗口标题格式的一致性和正确变化
+- 确认了焦点位置的准确恢复，包括页码和选中项位置
+- 测试了与现有功能的兼容性，包括筛选模式、搜索功能等
+
+### Bug Fixes Addressed
+1. **用户内容退出问题**：修复了从用户内容退出时跳过用户内容列表直接回到帖子详情的问题
+2. **页面位置丢失**：修复了从用户内容第N页返回时总是回到第1页的问题
+3. **状态覆盖问题**：修复了多次用户内容操作覆盖原始帖子详情状态的问题
+4. **键盘事件冲突**：修复了 `user_content_mode` 状态导致的键盘事件处理优先级冲突
+5. **标题格式变化**：恢复了原有的窗口标题格式，保持界面一致性

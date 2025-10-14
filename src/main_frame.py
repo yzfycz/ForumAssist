@@ -692,7 +692,13 @@ class MainFrame(wx.Frame):
                 # 退出用户内容查看模式，返回之前的帖子详情
                 self.exit_user_content_mode()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
-                self.go_back_to_previous_list()
+                # 检查是否从用户内容进入的帖子详情
+                if hasattr(self, 'user_content_state_before_thread') and self.user_content_state_before_thread:
+                    # 返回到用户内容页面
+                    self.return_to_user_content()
+                else:
+                    # 正常返回到列表
+                    self.go_back_to_previous_list()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'message_detail':
                 # 在消息详情时返回消息列表
                 self.load_messages()
@@ -1576,11 +1582,16 @@ class MainFrame(wx.Frame):
             else:  # 普通帖子项或消息项
                 # 根据内容类型处理不同的操作
                 if hasattr(self, 'current_content_type'):
-                    if self.current_content_type in ['thread_list', 'search_result', 'user_threads', 'user_posts', 'home_content']:
+                    if self.current_content_type in ['thread_list', 'search_result', 'home_content']:
                         # 加载帖子详情
                         tid = item_data.get('tid', 0)
                         if tid and tid > 0:
                             self.load_thread_detail(tid)
+                    elif self.current_content_type in ['user_threads', 'user_posts']:
+                        # 从用户内容加载帖子详情，需要保存用户内容状态以便返回
+                        tid = item_data.get('tid', 0)
+                        if tid and tid > 0:
+                            self.load_thread_detail_from_user_content(tid)
                     elif self.current_content_type == 'message_list':
                         # 加载消息详情
                         touid = item_data.get('touid', 0)
@@ -2417,6 +2428,24 @@ class MainFrame(wx.Frame):
     def load_thread_detail(self, tid):
         """加载帖子详情"""
         self.load_thread_detail_and_restore_page(tid, 1)
+
+    def load_thread_detail_from_user_content(self, tid):
+        """从用户内容页面加载帖子详情，保存用户内容状态以便返回"""
+        # 保存用户内容状态，用于退格键返回
+        self.user_content_state_before_thread = {
+            'user_content_mode': getattr(self, 'user_content_mode', None),
+            'current_content_type': getattr(self, 'current_content_type', ''),
+            'current_uid': getattr(self, 'current_uid', None),
+            'selected_index': self.list_ctrl.GetSelectedRow() if self.list_ctrl.GetSelectedRow() != -1 else 0,
+            'current_page': getattr(self, 'current_pagination', {}).get('page', 1),
+            # 保存最初的帖子详情状态，避免被后续的帖子详情覆盖
+            'original_thread_state': getattr(self, 'previous_state', None)
+        }
+        # 清除 user_content_mode，避免键盘事件处理时匹配到错误的条件
+        self.user_content_mode = None
+
+        # 加载帖子详情（不保存状态，避免覆盖用户内容状态）
+        self.load_thread_detail_and_restore_page(tid, 1, save_state=False)
 
     def load_thread_detail_and_restore_page(self, tid, target_page=1, save_state=True):
         """加载帖子详情并恢复到指定页面"""
@@ -5314,22 +5343,32 @@ class MainFrame(wx.Frame):
 
     def save_current_state(self):
         """保存当前状态，用于返回导航"""
+        # 获取当前选中的索引
+        current_selected = self.list_ctrl.GetSelectedRow()
+        if current_selected == -1:
+            current_selected = getattr(self, 'saved_list_index', 0)
+
+        # 获取当前页码 - 从分页信息中获取
+        current_page = 1
+        if hasattr(self, 'current_pagination') and self.current_pagination:
+            current_page = self.current_pagination.get('page', 1)
+
         self.previous_state = {
             'content_type': self.current_content_type,
             'tid': getattr(self, 'current_tid', None),
-            'selected_index': getattr(self, 'saved_list_index', 0),
-            'page': getattr(self, 'current_page', 1),
+            'selected_index': current_selected,
+            'page': current_page,
             'filter_mode': getattr(self, 'filter_mode', None),
             'user_content_mode': getattr(self, 'user_content_mode', None)
         }
 
-    def load_user_threads_and_restore_focus(self, uid):
+    def load_user_threads_and_restore_focus(self, uid, page=1):
         """加载用户的主题帖子并恢复焦点"""
         try:
             # 状态栏已移除，无需设置状态文本
 
             # 调用API获取用户的主题帖子
-            result = self.forum_client.get_user_threads(self.current_forum, uid, page=1)
+            result = self.forum_client.get_user_threads(self.current_forum, uid, page=page)
 
             # 使用原始数据结构，包含threadlist和pagination
             threadlist = result.get('threadlist', [])
@@ -5358,13 +5397,13 @@ class MainFrame(wx.Frame):
             # 状态栏已移除，无需设置状态文本
             pass
 
-    def load_user_posts_and_restore_focus(self, uid):
+    def load_user_posts_and_restore_focus(self, uid, page=1):
         """加载用户的回复帖子并恢复焦点"""
         try:
             # 状态栏已移除，无需设置状态文本
 
             # 调用API获取用户的回复帖子
-            result = self.forum_client.get_user_posts(self.current_forum, uid, page=1)
+            result = self.forum_client.get_user_posts(self.current_forum, uid, page=page)
 
             # 使用原始数据结构，包含threadlist和pagination
             threadlist = result.get('threadlist', [])
@@ -5609,22 +5648,91 @@ class MainFrame(wx.Frame):
         # 清除用户内容模式
         self.user_content_mode = None
 
+        # 清除可能存在的用户内容状态
+        self.user_content_state_before_thread = None
+
         # 恢复之前的帖子详情
         if hasattr(self, 'previous_state') and self.previous_state:
             state = self.previous_state
             if state.get('content_type') == 'thread_detail' and state.get('tid'):
-                # 恢复到帖子详情
-                self.load_thread_detail(state['tid'])
+                # 恢复到帖子详情，使用save_state=False避免覆盖导航状态
+                # 恢复到原来的页码
+                target_page = state.get('page', 1)
+                self.load_thread_detail_and_restore_page(state['tid'], target_page, save_state=False)
 
                 # 恢复焦点位置
                 if state.get('selected_index') is not None:
                     wx.CallAfter(lambda: self.restore_list_focus(state['selected_index']))
+
+                # 恢复窗口标题到默认格式
+                self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
         else:
             # 如果没有之前的帖子详情状态，恢复到默认标题
             self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
 
     def restore_list_focus(self, index):
         """恢复列表焦点到指定位置"""
+        if hasattr(self, 'list_ctrl') and self.list_ctrl.GetItemCount() > index:
+            self.list_ctrl.SelectRow(index)
+            self.list_ctrl.SetFocus()
+
+    def return_to_user_content(self):
+        """返回到用户内容页面"""
+        if not hasattr(self, 'user_content_state_before_thread') or not self.user_content_state_before_thread:
+            return
+
+        state = self.user_content_state_before_thread
+        user_content_mode = state.get('user_content_mode')
+        content_type = state.get('current_content_type')
+        uid = state.get('current_uid')
+
+        if not user_content_mode or not uid:
+            return
+
+        # 使用保存的原始帖子详情状态，而不是当前的
+        original_thread_state = state.get('original_thread_state')
+        if original_thread_state:
+            self.previous_state = original_thread_state
+        else:
+            # 如果没有保存的原始状态，使用当前状态（向后兼容）
+            self.previous_state = {
+                'content_type': 'thread_detail',
+                'tid': getattr(self, 'current_tid', None),
+                'selected_index': 0,
+                'page': 1,
+                'filter_mode': getattr(self, 'filter_mode', None),
+                'user_content_mode': None
+            }
+
+        # 恢复用户内容模式
+        self.user_content_mode = user_content_mode
+        self.current_content_type = content_type
+        self.current_uid = uid
+
+        # 恢复到之前的页面和焦点
+        target_page = state.get('current_page', 1)
+        selected_index = state.get('selected_index', 0)
+
+        # 根据内容类型加载相应的用户内容，使用保存的页码
+        if content_type == 'user_threads':
+            self.load_user_threads_and_restore_focus(uid, page=target_page)
+            # 恢复窗口标题
+            username = user_content_mode.get('username', str(uid))
+            self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手 ({username}的主题)")
+        elif content_type == 'user_posts':
+            self.load_user_posts_and_restore_focus(uid, page=target_page)
+            # 恢复窗口标题
+            username = user_content_mode.get('username', str(uid))
+            self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手 ({username}的回复)")
+
+        # 延迟执行焦点恢复
+        wx.CallAfter(lambda: self.restore_user_content_focus(selected_index))
+
+        # 不要立即清除用户内容状态，保持用于第二次退格键
+        # 在第二次退格键时（从用户内容到帖子详情）才会清除
+
+    def restore_user_content_focus(self, index):
+        """恢复用户内容页面的焦点"""
         if hasattr(self, 'list_ctrl') and self.list_ctrl.GetItemCount() > index:
             self.list_ctrl.SelectRow(index)
             self.list_ctrl.SetFocus()
