@@ -873,6 +873,9 @@ class MainFrame(wx.Frame):
 
     def load_my_threads_and_restore_focus(self):
         """加载我的发表并恢复焦点"""
+        # 保存当前状态，用于退格键返回
+        self.save_current_state()
+
         user_info = self.auth_manager.get_user_info(self.current_forum)
         if user_info:
             uid = user_info.get('uid')
@@ -885,6 +888,9 @@ class MainFrame(wx.Frame):
 
     def load_my_posts_and_restore_focus(self):
         """加载我的回复并恢复焦点"""
+        # 保存当前状态，用于退格键返回
+        self.save_current_state()
+
         user_info = self.auth_manager.get_user_info(self.current_forum)
         if user_info:
             uid = user_info.get('uid')
