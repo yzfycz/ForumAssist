@@ -5757,12 +5757,22 @@ class MainFrame(wx.Frame):
         if content_type == 'user_threads':
             self.load_user_threads_and_restore_focus(uid, page=target_page)
             # 恢复窗口标题
-            username = user_content_mode.get('username', str(uid))
+            if is_my_content:
+                # 对于"我的发表"，使用当前用户的昵称
+                username = self.get_user_nickname()
+            else:
+                # 对于查看其他用户，使用user_content_mode中的用户名
+                username = user_content_mode.get('username', str(uid))
             self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手 ({username}的主题)")
         elif content_type == 'user_posts':
             self.load_user_posts_and_restore_focus(uid, page=target_page)
             # 恢复窗口标题
-            username = user_content_mode.get('username', str(uid))
+            if is_my_content:
+                # 对于"我的回复"，使用当前用户的昵称
+                username = self.get_user_nickname()
+            else:
+                # 对于查看其他用户，使用user_content_mode中的用户名
+                username = user_content_mode.get('username', str(uid))
             self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手 ({username}的回复)")
 
         # 延迟执行焦点恢复
