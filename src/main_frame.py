@@ -1898,9 +1898,9 @@ class MainFrame(wx.Frame):
         elif text == "最新回复":
             self.load_latest_replies()
         elif text == "我的发表":
-            self.load_my_threads()
+            self.load_my_threads_and_restore_focus()
         elif text == "我的回复":
-            self.load_my_posts()
+            self.load_my_posts_and_restore_focus()
         elif text == "我的消息":
             self.load_messages()
         else:
