@@ -692,13 +692,8 @@ class MainFrame(wx.Frame):
                 # 退出用户内容查看模式，返回之前的帖子详情
                 self.exit_user_content_mode()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
-                # 检查是否从用户内容进入的帖子详情
-                if hasattr(self, 'user_content_state_before_thread') and self.user_content_state_before_thread:
-                    # 返回到用户内容页面
-                    self.return_to_user_content()
-                else:
-                    # 正常返回到列表
-                    self.go_back_to_previous_list()
+                # 正常返回到列表
+                self.go_back_to_previous_list()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'message_detail':
                 # 在消息详情时返回消息列表
                 self.load_messages()
@@ -797,23 +792,14 @@ class MainFrame(wx.Frame):
     def go_back_to_previous_list(self):
         """返回之前的列表"""
         try:
-            # 确保清除用户内容状态，避免影响后续导航
-            self.user_content_state_before_thread = None
-
             # 优先尝试恢复保存的完整列表状态（不刷新）
             if hasattr(self, 'saved_list_state') and self.saved_list_state:
                 state = self.saved_list_state
                 content_type = state.get('current_content_type', '')
 
-                # 对于用户内容，强制重新加载以确保数据最新
-                if content_type in ['user_threads', 'user_posts']:
-                    # 清除保存的状态，强制重新加载
-                    self.saved_list_state = None
-                    # 继续到下面的逻辑重新加载
-                else:
-                    # 对于其他内容类型，直接恢复保存的列表状态（不重新加载）
-                    self.restore_saved_list_state()
-                    return
+                # 对于所有内容类型，都直接恢复保存的列表状态（不重新加载）
+                self.restore_saved_list_state()
+                return
             # 其次尝试恢复到保存的页面信息
             elif self.saved_page_info and self.restore_to_correct_page():
                 # 成功恢复到正确页面，现在恢复焦点
@@ -1615,10 +1601,10 @@ class MainFrame(wx.Frame):
                         if tid and tid > 0:
                             self.load_thread_detail(tid)
                     elif self.current_content_type in ['user_threads', 'user_posts']:
-                        # 从用户内容加载帖子详情，需要保存用户内容状态以便返回
+                        # 从我的发表/回复加载帖子详情
                         tid = item_data.get('tid', 0)
                         if tid and tid > 0:
-                            self.load_thread_detail_from_user_content(tid)
+                            self.load_thread_detail(tid)
                     elif self.current_content_type == 'message_list':
                         # 加载消息详情
                         touid = item_data.get('touid', 0)
@@ -2454,8 +2440,6 @@ class MainFrame(wx.Frame):
 
     def load_thread_detail(self, tid):
         """加载帖子详情"""
-        # 确保清除用户内容状态，避免影响普通导航
-        self.user_content_state_before_thread = None
         self.load_thread_detail_and_restore_page(tid, 1)
 
     def load_thread_detail_from_user_content(self, tid):
