@@ -900,6 +900,9 @@ class MainFrame(wx.Frame):
     def load_my_threads_and_restore_focus(self):
         """加载我的发表并恢复焦点"""
         print(f"[DEBUG] load_my_threads_and_restore_focus() called")
+        # 立即设置 current_content_type，确保进入帖子详情时能正确保存
+        self.current_content_type = 'user_threads'
+
         user_info = self.auth_manager.get_user_info(self.current_forum)
         if user_info:
             uid = user_info.get('uid')
@@ -916,6 +919,9 @@ class MainFrame(wx.Frame):
     def load_my_posts_and_restore_focus(self):
         """加载我的回复并恢复焦点"""
         print(f"[DEBUG] load_my_posts_and_restore_focus() called")
+        # 立即设置 current_content_type，确保进入帖子详情时能正确保存
+        self.current_content_type = 'user_posts'
+
         user_info = self.auth_manager.get_user_info(self.current_forum)
         if user_info:
             uid = user_info.get('uid')
