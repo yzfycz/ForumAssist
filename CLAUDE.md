@@ -1506,3 +1506,90 @@ def return_to_user_content(self):
 3. **状态覆盖问题**：修复了多次用户内容操作覆盖原始帖子详情状态的问题
 4. **键盘事件冲突**：修复了 `user_content_mode` 状态导致的键盘事件处理优先级冲突
 5. **标题格式变化**：恢复了原有的窗口标题格式，保持界面一致性
+
+29. **状态保存逻辑修复 (2025-10-15)**
+    - 修复了从板块列表进入帖子详情后按退格键无法返回原列表的问题
+    - 恢复到参考版本d668099的核心状态保存逻辑，确保状态保存的一致性和可靠性
+    - 移除了过度修改的状态保存排除条件，恢复简单的条件判断逻辑
+    - 修复了load_content方法调用错误，确保所有列表类型都使用正确的加载方法
+    - 完全保持用户内容导航功能不受影响，确保用户内容的多层级导航正常工作
+
+### Key Technical Improvements (状态保存逻辑修复)
+
+**状态保存条件恢复：**
+- **参考版本对齐**：将状态保存条件恢复为参考版本的简单逻辑 `if save_state and hasattr(self, 'current_content_type')`
+- **移除排除条件**：删除了 `and self.current_content_type not in ['user_threads', 'user_posts']` 的过度限制
+- **用户功能保护**：用户内容专用方法继续使用 `save_state=False`，保持专用导航逻辑不变
+
+**加载方法修复：**
+- **方法调用修正**：修复了 `load_content` 方法中的调用错误，使用基础版本而非 `and_restore_focus` 版本
+- **焦点管理优化**：移除了之前添加的多余焦点设置代码，恢复到参考版本的简洁逻辑
+- **状态管理统一**：确保所有列表类型（板块列表、最新发表、最新回复等）都使用统一的状态管理方式
+
+**代码结构清理：**
+- **多余代码移除**：删除了在各个 `and_restore_focus` 方法中添加的 `wx.CallAfter(self.reset_keyboard_cursor, 0)` 调用
+- **逻辑简化**：回到了参考版本经过验证的简单、可靠的状态管理方式
+- **向后兼容**：所有现有功能都得到保持，同时修复了状态保存问题
+
+### Implementation Details
+
+**状态保存条件恢复：**
+```python
+# 修改前（过度复杂）：
+if save_state and hasattr(self, 'current_content_type') and self.current_content_type not in ['user_threads', 'user_posts']:
+
+# 修改后（参考版本）：
+if save_state and hasattr(self, 'current_content_type'):
+```
+
+**加载方法修复：**
+```python
+# 修改前（错误调用）：
+if text == "最新发表":
+    self.load_latest_threads_and_restore_focus()
+elif text == "最新回复":
+    self.load_latest_replies_and_restore_focus()
+else:
+    self.load_forum_section_and_restore_focus(text, fid)
+
+# 修改后（正确调用）：
+if text == "最新发表":
+    self.load_latest_threads()
+elif text == "最新回复":
+    self.load_latest_replies()
+else:
+    self.load_forum_section(text, fid)
+```
+
+**用户功能保护：**
+```python
+# 用户内容专用方法保持不变
+def load_thread_detail_from_user_content(self, tid):
+    # 保存用户内容状态
+    self.user_content_state_before_thread = {...}
+    # 清除 user_content_mode 避免键盘事件处理冲突
+    self.user_content_mode = None
+    # 使用 save_state=False 保持专用逻辑
+    self.load_thread_detail_and_restore_page(tid, 1, save_state=False)
+```
+
+### Key Features
+- **状态保存修复**：从板块列表进入帖子详情后，按退格键能正确返回原列表
+- **用户功能保护**：用户内容的所有导航功能（发表/回复）完全保持原有行为
+- **逻辑简化**：回到了经过验证的简单、可靠的状态管理方式
+- **向后兼容**：所有现有功能都得到保持，包括筛选模式、搜索功能等
+- **稳定性提升**：消除了状态保存的不一致性，提高了整体导航稳定性
+
+### Testing Results
+- 验证了从所有板块列表（包括最新发表、最新回复、我的发表、我的回复）进入帖子详情后，按退格键都能正确返回原列表
+- 确认了用户内容导航功能完全不受影响，所有用户内容相关的功能都正常工作
+- 测试了筛选模式在修复后仍然正常工作
+- 验证了搜索功能的返回导航正常
+- 确认了与现有所有功能的兼容性，没有引入新的问题
+
+### Bug Fixes Addressed
+1. **板块列表返回问题**：修复了从板块列表进入帖子详情后按退格键无法返回的问题
+2. **状态保存不一致**：修复了不同内容类型状态保存逻辑不一致的问题
+3. **加载方法调用错误**：修复了 `load_content` 方法中调用错误的方法版本
+4. **过度复杂逻辑**：简化了过度复杂的状态保存条件判断逻辑
+5. **焦点设置冗余**：移除了不必要的焦点设置代码，恢复了简洁的实现
