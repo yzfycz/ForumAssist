@@ -804,9 +804,15 @@ class MainFrame(wx.Frame):
                 state = self.saved_list_state
                 content_type = state.get('current_content_type', '')
 
-                # 直接恢复保存的列表状态（不重新加载）
-                self.restore_saved_list_state()
-                return
+                # 对于用户内容，强制重新加载以确保数据最新
+                if content_type in ['user_threads', 'user_posts']:
+                    # 清除保存的状态，强制重新加载
+                    self.saved_list_state = None
+                    # 继续到下面的逻辑重新加载
+                else:
+                    # 对于其他内容类型，直接恢复保存的列表状态（不重新加载）
+                    self.restore_saved_list_state()
+                    return
             # 其次尝试恢复到保存的页面信息
             elif self.saved_page_info and self.restore_to_correct_page():
                 # 成功恢复到正确页面，现在恢复焦点
