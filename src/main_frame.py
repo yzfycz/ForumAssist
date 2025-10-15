@@ -692,11 +692,14 @@ class MainFrame(wx.Frame):
                 # 退出用户内容查看模式，返回之前的帖子详情
                 self.exit_user_content_mode()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
+                print(f"[DEBUG] Backspace in thread_detail")
                 # 检查是否从用户内容进入的帖子详情
                 if hasattr(self, 'user_content_state_before_thread') and self.user_content_state_before_thread:
+                    print(f"[DEBUG] Returning to user content")
                     # 返回到用户内容页面
                     self.return_to_user_content()
                 else:
+                    print(f"[DEBUG] Normal return to list")
                     # 正常返回到列表
                     self.go_back_to_previous_list()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'message_detail':
@@ -797,19 +800,26 @@ class MainFrame(wx.Frame):
     def go_back_to_previous_list(self):
         """返回之前的列表"""
         try:
+            print(f"[DEBUG] go_back_to_previous_list() called")
+            print(f"[DEBUG] current_content_type: {getattr(self, 'current_content_type', 'None')}")
+
             # 确保清除用户内容状态，避免影响后续导航
             self.user_content_state_before_thread = None
+
             # 优先尝试恢复保存的完整列表状态（不刷新）
             if hasattr(self, 'saved_list_state') and self.saved_list_state:
                 state = self.saved_list_state
                 content_type = state.get('current_content_type', '')
+                print(f"[DEBUG] Found saved_list_state with content_type: {content_type}")
 
                 # 对于用户内容，强制重新加载以确保数据最新
                 if content_type in ['user_threads', 'user_posts']:
+                    print(f"[DEBUG] User content detected, forcing reload")
                     # 清除保存的状态，强制重新加载
                     self.saved_list_state = None
                     # 继续到下面的逻辑重新加载
                 else:
+                    print(f"[DEBUG] Non-user content, restoring saved state")
                     # 对于其他内容类型，直接恢复保存的列表状态（不重新加载）
                     self.restore_saved_list_state()
                     return
@@ -822,12 +832,16 @@ class MainFrame(wx.Frame):
                 # 回退到原来的恢复逻辑
                 content_type = self.previous_content_type
                 params = self.previous_content_params
+                print(f"[DEBUG] Using previous_content_type: {content_type}")
 
                 if content_type == 'thread_list' and 'fid' in params:
+                    print(f"[DEBUG] Loading forum section")
                     self.load_forum_section_and_restore_focus(params.get('forum_name', ''), params['fid'])
                 elif content_type == 'user_threads':
+                    print(f"[DEBUG] Loading my threads")
                     self.load_my_threads_and_restore_focus()
                 elif content_type == 'user_posts':
+                    print(f"[DEBUG] Loading my posts")
                     self.load_my_posts_and_restore_focus()
                 elif content_type == 'search_result' and 'keyword' in params:
                     self.search_content_and_restore_focus(params['keyword'])
@@ -885,6 +899,7 @@ class MainFrame(wx.Frame):
 
     def load_my_threads_and_restore_focus(self):
         """加载我的发表并恢复焦点"""
+        print(f"[DEBUG] load_my_threads_and_restore_focus() called")
         user_info = self.auth_manager.get_user_info(self.current_forum)
         if user_info:
             uid = user_info.get('uid')
@@ -900,6 +915,7 @@ class MainFrame(wx.Frame):
 
     def load_my_posts_and_restore_focus(self):
         """加载我的回复并恢复焦点"""
+        print(f"[DEBUG] load_my_posts_and_restore_focus() called")
         user_info = self.auth_manager.get_user_info(self.current_forum)
         if user_info:
             uid = user_info.get('uid')
