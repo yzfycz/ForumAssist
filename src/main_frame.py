@@ -692,14 +692,11 @@ class MainFrame(wx.Frame):
                 # 退出用户内容查看模式，返回之前的帖子详情
                 self.exit_user_content_mode()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'thread_detail':
-                print(f"[DEBUG] Backspace in thread_detail")
-                print(f"[DEBUG] Has user_content_state_before_thread: {hasattr(self, 'user_content_state_before_thread')}")
+                # 检查是否从用户内容进入的帖子详情
                 if hasattr(self, 'user_content_state_before_thread') and self.user_content_state_before_thread:
-                    print(f"[DEBUG] User content state exists, returning to user content")
                     # 返回到用户内容页面
                     self.return_to_user_content()
                 else:
-                    print(f"[DEBUG] No user content state, using normal return to list")
                     # 正常返回到列表
                     self.go_back_to_previous_list()
             elif hasattr(self, 'current_content_type') and self.current_content_type == 'message_detail':
@@ -2463,9 +2460,6 @@ class MainFrame(wx.Frame):
 
     def load_thread_detail_from_user_content(self, tid):
         """从用户内容页面加载帖子详情，保存用户内容状态以便返回"""
-        print(f"[DEBUG] load_thread_detail_from_user_content() called with tid: {tid}")
-        print(f"[DEBUG] current_content_type: {getattr(self, 'current_content_type', 'None')}")
-
         # 保存用户内容状态，用于退格键返回
         self.user_content_state_before_thread = {
             'user_content_mode': getattr(self, 'user_content_mode', None),
@@ -2476,7 +2470,6 @@ class MainFrame(wx.Frame):
             # 保存最初的帖子详情状态，避免被后续的帖子详情覆盖
             'original_thread_state': getattr(self, 'previous_state', None)
         }
-        print(f"[DEBUG] user_content_state_before_thread set with content_type: {self.user_content_state_before_thread['current_content_type']}")
 
         # 清除 user_content_mode，避免键盘事件处理时匹配到错误的条件
         self.user_content_mode = None
