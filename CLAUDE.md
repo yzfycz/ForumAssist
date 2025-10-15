@@ -97,6 +97,18 @@ Accounts stored in `config/forums.ini` (auto-created):
 - Forum URLs, usernames, encrypted passwords
 - AES encryption using `src/utils/crypto.py`
 
+### Multi-Account Configuration Structure
+```
+[Forum_争渡论坛]
+url = http://www.zd.hk/
+username1 = user1
+nickname1 = 用户1
+password1 = [encrypted_password]
+username2 = user2
+nickname2 = 用户2
+password2 = [encrypted_password]
+```
+
 ## Development Notes
 
 ### Accessibility Implementation
@@ -121,1475 +133,168 @@ Accounts stored in `config/forums.ini` (auto-created):
 - Validate API response parsing with real forum data
 - Check accessibility with screen readers when possible
 
-### Recent Fixes (2025-09-29)
-1. **User Content Display Fixes**
-   - Fixed "我的发表" and "我的回复" not displaying content due to pagination data extraction errors
-   - Corrected `get_user_posts` and `get_user_threads` methods to extract pagination info from `message.page` and `message.totalpage` instead of `message.pagination`
-   - Fixed data transformation logic in `load_my_threads` method - items are direct thread objects, not nested
-   - Unified data format consistency between user threads and posts
+## Key Features and Implementation
 
-2. **Home Content Pagination Support**
-   - Added pagination support to "最新发表" and "最新回复" features
-   - Enhanced `get_home_content` method with page parameter support
-   - Updated return structure to include pagination information
-   - Added `current_orderby` state management for sorting context
+### Data Management
+- **DataViewListCtrl Migration**: Replaced wx.ListCtrl with wx.dataview.DataViewListCtrl for better long text handling and screen reader optimization
+- **List Data Architecture**: Uses separate `list_data` array for metadata storage instead of hidden columns
+- **Display Format**: Comprehensive information display: `标题 作者:用户名;浏览:数量;板块:板块名;发表时间:时间;回复:数量;回复时间:时间;最后回复:用户名`
 
-3. **Pagination Logic Enhancement**
-   - Fixed user posts handling in all pagination methods (next, previous, jump)
-   - Added home content type support to all pagination handlers
-   - Improved data format conversion for threadlist-based user content
-   - Maintained consistent pagination behavior across all content types
+### Navigation System
+- **Multi-Level Navigation**: Support for complex navigation flows (forum list → thread detail → user content → thread detail → back to user content → back to original forum list)
+- **State Preservation**: Complete state saving across all navigation levels with automatic restoration
+- **Focus Management**: Intelligent cursor position memory and restoration for accessibility
 
-4. **List Display Format Overhaul (2025-09-29)**
-   - Implemented new comprehensive display format for all list types: `标题 作者:用户名;浏览:数量;板块:板块名;发表时间:时间;回复:数量;回复时间:时间;最后回复:用户名`
-   - Changed from multi-column to single-column display (2000px width) to accommodate full information
-   - Fixed "我的回复" data transformation to properly extract last username from `post.username` or fallback to `thread.lastusername`
-   - Fixed column index errors in pagination controls for single-column layout
-   - Enhanced information density while maintaining accessibility
+### User Interface Features
+- **Hierarchical Tree View**: Three-level forum hierarchy (Forum → TypeID1 → TypeID2)
+- **List Numbering**: Optional numbering system for better orientation in lists
+- **Keyboard Shortcuts**: Comprehensive shortcut system including Alt+letter menus, Ctrl+letter functions, and dialog shortcuts
+- **Context Menus**: Right-click and Application Key context menus with letter shortcuts
 
-### Key Implementation Details
-- **Data Structure Consistency**: All user content methods now return unified `threadlist` format
-- **Complete Pagination Coverage**: All content types now support full pagination functionality (我的发表: 58 pages, 我的回复: 116 pages)
-- **State Management**: Added sorting context tracking for home content navigation
-- **Backward Compatibility**: Maintained existing UI patterns while enhancing functionality
-- **Display Format**: Standardized information-rich display format across all list types
-- **Performance**: Optimized column width and data extraction for complete information display
+### Content Management
+- **Search Functionality**: Full-text search with HTML tag cleaning and result navigation
+- **User Content**: Complete user content navigation with pagination support
+- **Reply System**: Enhanced reply functionality with code generator and HTML formatting
+- **Filter Mode**: "只看他" (View Only) feature for filtering posts by specific users
 
-### Testing and Validation
-- Verified pagination functionality across all content types with real user data
-- Tested data transformation logic for proper field extraction and display
-- Validated new display format shows complete information without truncation
-- Confirmed accessibility with keyboard navigation and screen reader compatibility
+### Special Features
+- **Post Content Viewer**: Read-only dialog for viewing individual post floors with resource extraction
+- **Settings Dialog**: Tabbed interface for application preferences
+- **Multi-Account Support**: Switch between multiple forum accounts seamlessly
 
-### Recent Fixes (2025-09-29)
-5. **Reply List Navigation Fix**
-   - Fixed issue where users couldn't enter threads from "我的回复" list by pressing Enter
-   - Added 'user_posts' to the list activation condition in on_list_activated method (main_frame.py:691)
-   - Ensured consistent navigation behavior across all user content types
-   - Maintained proper thread detail loading for reply-based content
+## Recent Major Fixes (2025-10)
 
-6. **Multi-Account Support Implementation (2025-09-29)**
-   - Enhanced ConfigManager to support multiple accounts per forum with new configuration structure
-   - Updated AccountManager to prevent duplicate username creation within the same forum
-   - Added account switching functionality to MainFrame file menu
-   - Maintained existing account selection interface with list-based display
-   - Implemented comprehensive account CRUD operations (Create, Read, Update, Delete)
-   - Added username duplication validation for account creation and editing
-   - Enhanced configuration file structure to support multiple accounts per forum
-   - Preserved existing encryption and security measures for password storage
+1. **State Saving Logic Fix** (2025-10-15)
+   - Fixed navigation from thread lists back to original forum lists
+   - Restored simple state saving condition from reference version
+   - Maintained all user content navigation functionality
 
-7. **Hierarchical Tree View Implementation (2025-09-29)**
-   - Implemented hierarchical forum structure display using existing API data
-   - Enhanced tree view to show multi-level forum categories (level 0: forum, level 1: typeid1, level 2: typeid2)
-   - Removed unwanted "分类▼" and "状态▼" nodes from tree display
-   - Eliminated level prefixes (第0级, 第1级) as screen readers handle this automatically
-   - Added proper tree node data storage with type information for content loading
-   - Implemented type-specific content loading methods for different forum categories
-   - Fixed account creation dialog to default select first forum option
+2. **User Content Navigation Implementation** (2025-10-15)
+   - Complete multi-level navigation system for user content
+   - Page position and focus memory across navigation
+   - Title format standardization
 
-8. **Message Privacy Enhancement (2025-09-29)**
-   - Modified message list display to hide message content, showing only usernames
-   - Enhanced message conversation view to display full content when opening detailed conversation
-   - Fixed field name mapping issues between HTML parser and display methods
-   - Implemented proper message ordering to show oldest messages first, newest at bottom
-   - Added window maximization on application startup for better visibility
+3. **Filter Mode Implementation** (2025-10-12)
+   - "只看他" feature with original pagination structure
+   - Original floor number preservation
+   - Direct return navigation to forum lists
 
-9. **Thread Detail Pagination and Focus Management Fixes (2025-09-30)**
-   - Fixed critical thread detail pagination issue where multi-page threads only showed "page 1 of 1"
-   - Added auth parameter extraction from login response and passing to thread detail API calls
-   - Corrected pagination data extraction from API response (message.page/totalpage instead of message.pagination)
-   - Fixed floor numbering display to show actual floor numbers (21st floor, 22nd floor, etc.) on page 2+
-   - Implemented intelligent keyboard cursor position memory and restoration
-   - Enhanced screen reader compatibility with automatic focus on original post (index 0)
-   - Unified window title format across all functions: "论坛名字-<昵称>-论坛助手"
-   - Fixed title to remain constant when entering thread details instead of changing with each thread
-   - Cleaned up all debug console output for cleaner user experience
-   - Resolved syntax errors causing program startup failures due to indentation issues
+4. **Navigation and Reply Enhancements** (2025-10-11)
+   - Thread list state preservation without API refresh
+   - Reply page position maintenance
+   - Enhanced error handling for reply operations
 
-### Key Technical Improvements
-- **Auth Parameter Flow**: Added auth extraction in AuthenticationManager and passing to ForumClient for complete content access
-- **Focus Management System**: Implemented saved_list_index and saved_page_info for precise focus restoration
-- **Floor Calculation Logic**: Enhanced to consider current page number for correct floor display across multiple pages
-- **Pagination Data Pipeline**: Fixed data corruption issues between API response and display methods
-- **Title Format Standardization**: All functions now use consistent "forum-<nickname>-forum助手" format
-- **Code Cleanup**: Removed all debug print statements and fixed indentation errors
+5. **Keyboard Shortcuts and Context Menu** (2025-10-09)
+   - Fixed Ctrl+Enter and Shift+Enter in post details
+   - Comprehensive letter shortcuts for context menus
+   - Data structure compatibility improvements
 
-### Multi-Account Configuration Structure
-```
-[Forum_争渡论坛]
-url = http://www.zd.hk/
-username1 = user1
-nickname1 = 用户1
-password1 = [encrypted_password]
-username2 = user2
-nickname2 = 用户2
-password2 = [encrypted_password]
-```
+## Critical Implementation Details
 
-### Key Implementation Details
-- **Backward Compatibility**: Existing configuration files are automatically supported
-- **Security**: Password encryption and decryption maintained with AES encryption
-- **User Experience**: Account selection interface remains unchanged with familiar list layout
-- **Data Integrity**: Duplicate username prevention ensures consistent account management
-- **Menu Integration**: Added "切换账户" option to file menu for easy account switching
-
-10. **DataViewListCtrl Migration and Screen Reader Optimization (2025-10-02)**
-    - Replaced wx.ListCtrl with wx.dataview.DataViewListCtrl for better long text handling and auto-wrapping
-    - Completely resolved text truncation issues in post detail display when content exceeds normal length
-    - Implemented new data storage architecture using separate `list_data` array instead of hidden columns
-    - Eliminated "数据: XXX" information being read by screen readers from hidden DataViewListCtrl columns
-    - Updated all display methods to use single-column layout with metadata storage:
-      * `display_threads`: Stores thread ID and type information in `list_data`
-      * `display_posts`: Stores floor index and post data for thread details
-      * `display_messages`: Stores user ID and message data for private messages
-      * `display_message_conversation`: Stores conversation message data
-      * `add_pagination_controls`: Stores pagination control metadata
-    - Modified event handling methods to retrieve data from `list_data` array instead of hidden columns
-    - Enhanced regex-based data cleaning to remove any residual "数据: XXX" information from display text
-    - Maintained native screen reader compatibility without requiring special adaptations
-    - Preserved all existing functionality including keyboard navigation, pagination, and content loading
-
-### Key Technical Improvements (DataViewListCtrl Migration)
-- **Data Storage Architecture**: Replaced hidden columns with separate `list_data` array for metadata storage
-- **Screen Reader Optimization**: Eliminated hidden column data being read by assistive technologies
-- **Text Display Enhancement**: DataViewListCtrl provides better long text handling and automatic wrapping
-- **Event Handling Update**: Modified all interaction methods to work with new data storage approach
-- **Data Cleaning Enhancement**: Comprehensive regex patterns to remove unwanted data information
-- **Accessibility Preservation**: Maintained native screen reader support without special adaptations
-- **Backward Compatibility**: All existing functionality preserved with improved user experience
-
-11. **Dialog Event Handling and User Experience Fixes (2025-10-02)**
-    - Fixed dialog cancel buttons requiring two clicks to close due to improper event handling
-    - Resolved page jump dialog Enter key issues by implementing custom dialog with proper key binding
-    - Added comprehensive dialog state management to prevent duplicate dialog opening
-    - Implemented proper sizer parent-child relationships to fix wxPython assertion errors
-    - Enhanced focus management using wx.CallAfter to avoid timing issues with dialog initialization
-    - Added dialog-specific event handlers for cancel buttons and close events
-    - Fixed sizer architecture: panel.SetSizer() for child panels, dialog.SetSizerAndFit() for main dialog sizer
-    - Implemented dialog state flags (_reply_dialog_open, _page_dialog_open) to prevent concurrent opening
-    - Added comprehensive exception handling with state cleanup to prevent dialog lock-up
-    - Improved user experience with automatic focus setting and text selection in input fields
-
-### Key Technical Improvements (Dialog Fixes)
-- **Dialog State Management**: Implemented robust state tracking to prevent duplicate dialog instances
-- **Event Handling Optimization**: Added dedicated event handlers for cancel buttons and dialog close events
-- **Sizer Architecture Fix**: Corrected parent-child sizer relationships to resolve wxPython assertion warnings
-- **Focus Management Enhancement**: Used wx.CallAfter for proper focus timing in dialog initialization
-- **Keyboard Navigation**: Implemented proper Enter key handling in custom page jump dialog
-- **Exception Safety**: Added comprehensive state cleanup in exception handlers to prevent dialog lock-up
-- **User Experience**: Improved input field behavior with automatic focus and text selection
-
-12. **Post Content Viewer Enhancement (2025-10-02)**
-    - Transformed post floor editor from editing mode to read-only viewing mode for better user experience
-    - Modified TextCtrl to use wx.TE_READONLY and wx.TE_DONTWRAP styles for non-editable content display
-    - Fixed wxPython sizer assertion errors by implementing proper parent-child sizer relationships
-    - Enhanced dialog title and labels from "编辑" (Edit) to "浏览" (View) to reflect new functionality
-    - Removed save button and simplified interface to include only close button for cleaner UX
-    - Implemented comprehensive dialog state management with _floor_dialog_open flag to prevent duplicate opening
-    - Added dedicated event handlers for close button and dialog close events to ensure proper state cleanup
-    - Enhanced keyboard navigation with Escape and Backspace keys for quick dialog dismissal
-    - Used wx.CallAfter for proper focus management and timing issues
-    - Added exception safety with try-finally blocks to ensure state cleanup in all scenarios
-    - Maintained all existing keyboard shortcuts and accessibility features
-
-### Key Technical Improvements (Post Viewer Enhancement)
-- **Read-Only Mode**: Converted editing functionality to viewing-only with proper style flags
-- **Text Display Optimization**: Disabled automatic text wrapping while maintaining multi-line display capability
-- **Dialog Architecture**: Implemented proper sizer hierarchy with separate main_sizer and panel sizer to resolve assertion errors
-- **State Management**: Added _floor_dialog_open flag tracking with comprehensive cleanup in all exit paths
-- **Event Handling**: Separated close button event handling from keyboard events for better control
-- **Focus Management**: Used wx.CallAfter to set focus to content area for immediate screen reader access
-- **Exception Safety**: Implemented robust error handling with state cleanup to prevent dialog lock-up
-- **User Interface**: Simplified interface design with appropriate button labeling and dialog titles
-
-13. **Forum Subsection First Content Page Auto-Detection (2025-10-02)**
-   - Implemented binary search algorithm to automatically find the first content page in forum subsections with empty initial pages
-   - Added `_find_first_content_page()` method using O(log n) time complexity for efficient page discovery
-   - Enhanced `load_forum_section_with_type()` method to detect empty first pages and trigger automatic content search
-   - Implemented comprehensive page offset management to maintain user-friendly pagination display
-   - Updated all pagination methods (`load_next_page`, `load_previous_page`, `jump_to_page`) to handle page offsets correctly
-   - Added encoding error handling for API responses to prevent search failures
-   - Modified `display_threads()` method to accept and store API parameters for consistent pagination behavior
-   - Ensured users see content pages as "page 1" with no ability to navigate to previous pages
-   - Maintained backward compatibility with existing forum navigation functionality
-
-### Key Technical Improvements (First Content Page Detection)
-- **Binary Search Algorithm**: Efficient O(log n) search for finding first content page in large paginated subsections
-- **Page Offset Management**: Complete offset system allowing seamless user experience when content starts on later pages
-- **API Parameter Preservation**: Consistent parameter passing through all pagination operations for type-specific content
-- **Error Handling**: Robust encoding error handling to prevent search interruption on problematic API responses
-- **User Experience Optimization**: Transparent offset handling where users perceive found content as page 1
-- **Backward Compatibility**: All existing functionality preserved while adding new smart detection capabilities
-
-14. **Three-Level Forum Hierarchy Implementation (2025-10-03)**
-    - Implemented complete three-level hierarchy structure for forum navigation (Forum → TypeID1 → TypeID2)
-    - Enhanced tree view to display proper hierarchical relationships: 反馈 → 企业版/公益版 → 已解决/未解决
-    - Modified tree building logic to correctly associate global TypeID2 (status) items with each TypeID1 category
-    - Updated content loading methods to handle proper typeid1 + typeid2 parameter combinations for API calls
-    - Enhanced pagination system to work with three-level hierarchy maintaining all existing functionality
-    - Removed debug print statements from all source files for cleaner user experience
-    - Verified functionality with real forum data showing correct thread counts for each combination
-
-### Key Technical Improvements (Three-Level Hierarchy)
-- **Hierarchical Data Structure**: Proper parent-child relationships between forum categories and status types
-- **API Parameter Combination**: Correct typeid1 + typeid2 parameter passing for filtered content retrieval
-- **Tree Architecture**: Enhanced tree building logic to support global typeid2 association with typeid1 categories
-- **Content Loading**: Type-specific content loading methods that respect hierarchical relationships
-- **Pagination Compatibility**: All pagination methods work seamlessly with three-level structure
-- **Code Cleanup**: Removed all debug output for production-ready code quality
-
-### Implementation Details
-The three-level hierarchy correctly represents the forum structure:
-```
-反馈 (Forum ID: 4)
-├── 企业版 (TypeID1: 1)
-│   ├── 已解决 (TypeID2: 82) - 17 threads
-│   └── 未解决 (TypeID2: 41) - 0 threads
-├── 公益版 (TypeID1: 2)
-│   ├── 已解决 (TypeID2: 82) - 20 threads
-│   └── 未解决 (TypeID2: 41) - 19 threads
-└── 其他分类...
-    ├── 已解决
-    └── 未解决
-```
-
-### Testing Results
-- Verified correct API parameter combinations (typeid1 + typeid2) return expected thread counts
-- Confirmed tree view displays proper hierarchical structure with expandable nodes
-- Tested pagination functionality works correctly at all hierarchy levels
-- Validated keyboard navigation and screen reader compatibility maintained
-
-15. **List Numbering Feature Implementation (2025-10-03)**
-    - Added configurable list numbering system that displays item positions in all list views
-    - Implemented settings dialog with tabbed interface accessible via File → Settings menu
-    - Enhanced ConfigManager with generic settings management methods for future extensibility
-    - Added show_list_numbers configuration option stored in [Settings] section of config file
-    - Updated all display methods to support optional numbering with consistent formatting
-    - Implemented real-time list reloading when settings are changed for immediate effect
-    - Added comprehensive error handling for DataViewListCtrl operations to prevent crashes
-
-### Key Technical Improvements (List Numbering Feature)
-- **Settings Architecture**: Implemented tabbed settings dialog with software settings tab for future expansion
-- **Configuration Management**: Added generic get_setting() and set_setting() methods for managing application preferences
-- **Numbering Logic**: Position-based numbering calculated after all items (including pagination controls) are added
-- **Format Standardization**: All numbered items use consistent "，序号之总数项" format (e.g., "，1之24项")
-- **Performance Optimization**: List rebuilding only occurs when numbering is enabled to minimize overhead
-- **Error Handling**: Comprehensive try-catch blocks around DataViewListCtrl operations to handle API variations
-
-### Implementation Details
-**Settings Dialog Structure:**
-```
-Settings (Dialog)
-└── Software Settings (Tab)
-    └── [复选框] 显示列表序号
-        说明：启用后将在列表中创建包含序号的隐藏列，格式为'1之24项'等
-```
-
-**Numbering Format Examples:**
-- **Threads**: "测试标题 作者:张三;浏览:100;板块:技术讨论;发表时间:2025-01-01;回复:5;回复时间:2025-01-02;最后回复:李四 ，1之28项"
-- **Posts**: "楼主 张三 说\n这是内容\n发表时间：2025-01-01 ，1之24项"
-- **Messages**: "张三 ，1之10项"
-- **Pagination**: "上一页(1) ，25之28项", "下一页(2) ，26之28项"
-- **Page Jump**: "当前第1页共3页，回车输入页码跳转 ，27之28项"
-
-**Menu Structure:**
-```
-文件 (File)
-├── 切换账户 (保持原有位置)
-├── 用户管理 (保持原有位置)
-├── 设置 (新增) → 软件设置 → 显示列表序号
-└── 退出 (保持原有位置)
-```
-
-**Configuration Structure:**
-```ini
-[Settings]
-show_list_numbers = false  # 或 true
-```
-
-### Key Features
-- **Optional Display**: Numbering is disabled by default, enabled via settings dialog
-- **Comprehensive Coverage**: All list types support numbering (threads, posts, messages, conversations, pagination controls)
-- **Real-time Updates**: Settings changes take effect immediately without requiring application restart
-- **Accessibility Maintained**: All existing keyboard navigation and screen reader features preserved
-- **Error Resilience**: Robust error handling prevents application crashes due to data inconsistencies
-- **Future Extensible**: Settings architecture allows for easy addition of new configuration options
-
-### Testing Results
-- Verified settings dialog opens and functions correctly with proper sizer architecture
-- Confirmed numbering appears correctly in all list types with proper format
-- Tested real-time settings changes update lists immediately without requiring restart
-- Validated pagination controls are included in numbering (e.g., "，25之28项" for last pagination item)
-- Confirmed backward compatibility - existing functionality unchanged when numbering disabled
-- Tested error handling with malformed API responses and missing data fields
-
-16. **Keyboard Shortcuts Implementation (2025-10-03)**
-    - Implemented comprehensive keyboard shortcuts system for enhanced accessibility and productivity
-    - Added menu-level shortcuts with Alt+letter access keys and Ctrl+letter function shortcuts
-    - Enhanced all dialog buttons with consistent Alt+letter activation shortcuts
-    - Implemented accelerator table system for global keyboard shortcuts handling
-    - Updated all UI text to display shortcut key hints for user guidance
-    - Ensured no conflicts with existing Windows system shortcuts or accessibility tools
-
-### Key Technical Improvements (Keyboard Shortcuts)
-- **Menu Navigation**: Alt+F (文件), Alt+H (帮助) with submenu access via M/Q/P/A keys
-- **Function Shortcuts**: Ctrl+M (账户管理), Ctrl+Q (切换账户), Ctrl+P (设置), F1 (关于)
-- **Dialog Controls**: Standardized button shortcuts - O(确定), C(取消), S(发送), N(新建), E(编辑), D(删除), R(刷新), V(查看对话)
-- **Accelerator Table**: Global shortcut handling using wx.AcceleratorTable for system-wide key capture
-- **Text Display**: All UI elements show shortcut hints in parentheses (e.g., "设置(&P) Ctrl+P")
-- **Accessibility**: Full keyboard navigation maintained with screen reader compatibility
-
-### Implementation Details
-**Menu Shortcuts:**
-```
-文件(&F)                    Alt+F
-├── 账户管理(&M)            Ctrl+M (Account Management)
-├── 切换账户(&Q)            Ctrl+Q (Switch Account - QieHuan)
-├── 设置(&P)                Ctrl+P (Preferences/Settings)
-└── 退出(&X)                Alt+F4 (Exit)
-
-帮助(&H)                    Alt+H
-└── 关于(&A)                F1 (About)
-```
-
-**Dialog Button Shortcuts:**
-```
-Common Dialog Controls:
-- 确定(&O)                 Alt+O (OK/Confirm)
-- 取消(&C)                 Alt+C (Cancel/Close)
-- 发送(&S)                 Alt+S (Send)
-
-Account Management:
-- 新建 (Ctrl+N)           Ctrl+N only (no Alt shortcut)
-- 编辑 (Ctrl+E)           Ctrl+E only (no Alt shortcut)
-- 删除 (Ctrl+D)           Ctrl+D only (no Alt shortcut)
-- 关闭                    Alt+C (Close)
-
-Message Management:
-- 刷新(&R) (F5)           Alt+R or F5 (Refresh)
-- 查看对话(&V)            Alt+V (View Conversation)
-```
-
-**Technical Implementation:**
-- Used wx.AcceleratorEntry and wx.AcceleratorTable for global shortcut handling
-- Added & symbol in button labels for Alt+key navigation
-- Implemented setup_keyboard_shortcuts() method in MainFrame for accelerator table binding
-- Custom ID mapping (1001-1004) for menu shortcut event handling
-- Preserved existing Ctrl+Enter and F5 shortcuts in message dialogs
-
-### Key Features
-- **Comprehensive Coverage**: All menus, dialogs, and common actions have keyboard shortcuts
-- **User-Friendly Hints**: All UI elements display available shortcuts in parentheses
-- **Conflict Avoidance**: Carefully selected shortcuts to avoid Windows system conflicts
-- **Accessibility First**: Designed specifically for visually impaired users with screen readers
-- **Backward Compatibility**: All existing functionality preserved with enhanced navigation
-- **Consistent Patterns**: Standardized shortcut conventions across all interface elements
-
-### Testing Results
-- Verified all menu shortcuts work correctly with both Alt and Ctrl combinations
-- Confirmed dialog button Alt+shortcuts activate proper actions
-- Tested global accelerator table functionality without conflicts
-- Validated shortcut hints display correctly in all UI text
-- Confirmed screen reader compatibility with keyboard navigation
-- Tested account management shortcuts (Ctrl+N/E/D) work without Alt interference
-- Verified no conflicts with existing Windows accessibility tools or shortcuts
-
-17. **Search Control Accessibility Enhancement (2025-10-03)**
-    - Fixed critical screen reader accessibility issue where search control was read as "control 编辑框" instead of proper label
-    - Analyzed successful accessibility patterns from account management dialog and applied them to search area
-    - Resolved layout structure issues that were preventing proper label-control association for screen readers
-    - Implemented proven 2-row, 2-column FlexGridSizer pattern for consistent accessibility behavior
-
-### Key Technical Improvements (Search Accessibility)
-- **Layout Structure Correction**: Changed from problematic 1×3 grid to proven 2×2 FlexGridSizer layout
-- **Control Type Optimization**: Replaced complex wx.SearchCtrl with standard wx.TextCtrl for better accessibility support
-- **Label Association**: Implemented proper StaticText label placement using verified pattern from working controls
-- **Consistency Pattern**: Applied exact same layout approach as successful account management dialog fields
-
-### Problem Analysis and Solution
-**Root Cause Identified:**
-- Original 3-column layout (label+search+button) broke label-control accessibility association
-- wx.SearchCtrl's complex internal structure interfered with screen reader recognition
-- Inconsistent layout pattern compared to other working accessible controls
-
-**Technical Solution:**
+### State Management
 ```python
-# Before (problematic):
-grid_sizer = wx.FlexGridSizer(1, 3, 5, 5)  # 1行3列破坏了关联
-self.search_ctrl = wx.SearchCtrl(...)      # 复合控件影响识别
-
-# After (working):
-grid_sizer = wx.FlexGridSizer(2, 2, 5, 5)  # 2行2列保持关联
-self.search_ctrl = wx.TextCtrl(...)        # 标准控件支持更好
-```
-
-**Layout Structure:**
-```
-Row 1: [搜索标签:] [搜索框输入区域]
-Row 2: [空标签]    [搜索按钮]
-```
-
-### Implementation Details
-**Key Changes Made:**
-- Changed grid layout from 1×3 to 2×2 FlexGridSizer for proper label association
-- Replaced wx.SearchCtrl with standard wx.TextCtrl to avoid complex control structure issues
-- Used same alignment flags as working controls: `wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL`
-- Applied consistent spacing (5px gaps) matching account management dialog
-- Maintained all existing functionality while improving accessibility
-
-**Code Pattern Applied:**
-```python
-# 搜索标签 - 完全复制账户管理对话框的成功模式
-search_label = wx.StaticText(search_panel, label="输入搜索关键词:")
-self.search_ctrl = wx.TextCtrl(search_panel, style=wx.TE_PROCESS_ENTER)
-
-# 2行2列布局
-grid_sizer.Add(search_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
-grid_sizer.Add(self.search_ctrl, 0, wx.EXPAND)
-grid_sizer.Add(empty_label, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
-grid_sizer.Add(search_button, 0, wx.ALIGN_LEFT)
-```
-
-### Testing Results
-- **Before Fix**: Screen reader read "control 编辑框" (incorrect)
-- **After Fix**: Screen reader correctly reads "输入搜索关键词: 编辑框" (correct)
-- Verified search functionality remains fully operational
-- Confirmed keyboard navigation (Tab/Enter) works properly
-- Tested that the fix doesn't affect other UI elements or accessibility features
-- Validated consistency with other accessible controls in the application
-
-### Key Features
-- **Screen Reader Compatibility**: Proper label-text association for assistive technologies
-- **Keyboard Navigation**: Maintained full keyboard accessibility with Tab/Enter support
-- **Visual Consistency**: Layout appearance unchanged for sighted users
-- **Proven Pattern**: Implementation based on verified working accessibility patterns
-- **Backward Compatibility**: All existing search functionality preserved
-- **Minimal Impact**: Focused change with no side effects on other components
-
-18. **Search Functionality and HTML Tag Cleaning Fixes (2025-10-03)**
-    - Fixed search API data path issue where search was returning no results due to incorrect data structure access
-    - Implemented comprehensive HTML tag cleaning across all search result display paths
-    - Enhanced user experience with automatic focus jumping to first search result and empty result notifications
-    - Added proper HTML tag cleaning in navigation restoration to prevent HTML code display when returning from post details
-
-### Key Technical Improvements (Search and HTML Cleaning)
-- **API Data Path Fix**: Corrected search method in forum_client.py to access `result.message` instead of `result.data`
-- **HTML Tag Cleaning**: Implemented consistent HTML tag removal using existing `clean_html_tags()` utility function
-- **Empty Result Handling**: Added user-friendly notifications with warning icon when no search results found
-- **Automatic Focus Management**: Implemented automatic focus jumping to first search result for improved navigation
-- **Navigation Consistency**: Ensured HTML tag cleaning is applied to all possible navigation paths including back navigation
-
-### Implementation Details
-**Fixed Search API Data Path:**
-```python
-# Before (forum_client.py)
-message = result.get('data', {})
-
-# After (forum_client.py)
-message = result.get('message', {})
-```
-
-**HTML Tag Cleaning Implementation:**
-- **Initial Search**: `search_content()` method cleans HTML tags before displaying results
-- **Navigation Return**: `search_content_and_restore_focus()` method ensures clean display when returning from post details
-- **Pagination Restoration**: `restore_to_correct_page()` method cleans HTML tags when restoring search results with pagination
-
-**User Experience Enhancements:**
-- Automatic focus jumps to first search result after successful search
-- Warning dialog with appropriate icon displayed when no results found
-- Consistent clean display across all navigation scenarios
-
-### Testing Results
-- Verified search functionality returns correct results with proper data structure access
-- Confirmed HTML tags are properly cleaned in all display scenarios including back navigation
-- Tested automatic focus jumping works correctly for improved keyboard navigation
-- Validated empty result notifications show appropriate user-friendly messages
-- Ensured consistency across all search result display paths and navigation scenarios
-
-19. **Reply Content Line Break Enhancement (2025-10-03)**
-    - Enhanced reply content processing to use `<p>` tags instead of `<br>` tags for better forum compatibility
-    - Implemented line-by-line wrapping where each line of user input is wrapped with `<p>` and `</p>` tags
-    - Improved display format to match forum's native HTML structure for proper line break rendering
-
-### Key Technical Improvements (Reply Content Enhancement)
-- **HTML Structure Compatibility**: Changed from `<br>` tags to `<p>` tags to match forum's native HTML format
-- **Line-by-Line Processing**: Each line (including empty lines) is wrapped with paragraph tags for consistent formatting
-- **HTML Tag Preservation**: User input HTML tags are preserved and work correctly within paragraph structure
-- **Forum Integration**: Better integration with forum's content display system
-
-### Implementation Details
-**Content Processing Logic:**
-```python
-# Before (using <br> tags)
-return text.replace('\n', '<br>')
-
-# After (using <p> tags)
-lines = text.split('\n')
-wrapped_lines = []
-for line in lines:
-    wrapped_lines.append(f'<p>{line}</p>')
-return ''.join(wrapped_lines)
-```
-
-**Example Transformation:**
-```
-User Input:
-第一行内容
-
-第二行内容
-<b>加粗文字</b>
-
-HTML Output:
-<p>第一行内容</p>
-<p></p>
-<p>第二行内容</p>
-<p><b>加粗文字</b></p>
-<p></p>
-```
-
-### Key Features
-- **Paragraph-Based Structure**: Each line becomes a separate paragraph for better HTML semantics
-- **Empty Line Preservation**: Empty lines are preserved as empty paragraphs for user-controlled spacing
-- **HTML Compatibility**: User-input HTML tags work correctly within the paragraph structure
-- **Forum Native Format**: Output format matches forum's expected HTML structure for optimal display
-
-20. **Code Generator Feature Implementation (2025-10-03)**
-    - Implemented comprehensive code generator functionality in reply dialog for easy HTML code insertion
-    - Added "添加代码(&J)" button to reply dialog with keyboard shortcut support
-    - Created CodeGeneratorDialog class with dynamic field labels based on selected code type
-    - Supported code types: 超链接, 音频, 图片 (in that order)
-    - Implemented smart code insertion at cursor position with automatic focus management
-    - Enhanced user experience with proper focus behavior and keyboard navigation
-
-### Key Technical Improvements (Code Generator Feature)
-- **Dynamic Dialog Interface**: Field labels automatically update based on selected code type
-- **Smart Code Insertion**: Generated code is inserted at cursor position with proper focus restoration
-- **Comprehensive Code Support**: Multiple code types with proper HTML formatting:
-  - 超链接: `<a href="地址">名称</a>`
-  - 音频: `<audio controls="controls" src="地址" title="名称"> </audio>`
-  - 图片: `<a href="地址"><img alt="名称" src="地址" /></a>`
-- **Focus Management**: Default focus on combo box for easy type selection, proper focus handling after insertion
-- **Keyboard Accessibility**: Full keyboard navigation with Alt+J shortcut for code generator access
-
-### Implementation Details
-**Code Generator Dialog Structure:**
-```
-┌─────────────────────────┐
-│ 添加代码                 │
-├─────────────────────────┤
-│ 代码类型: [超链接▼]      │
-│                         │
-│ 超链接名字: [        ]  │
-│ 超链接地址: [        ]  │
-│                         │
-│ [确定]     [取消]        │
-└─────────────────────────┘
-```
-
-**Dynamic Field Labels:**
-- **超链接**: 超链接名字 + 超链接地址
-- **音频**: 音频名称 + 音频地址
-- **图片**: 图片名称 + 图片地址
-
-**Code Insertion Logic:**
-```python
-# Insert generated code at cursor position
-current_content = content_ctrl.GetValue()
-cursor_pos = content_ctrl.GetInsertionPoint()
-new_content = current_content[:cursor_pos] + generated_code + current_content[cursor_pos:]
-content_ctrl.SetValue(new_content)
-content_ctrl.SetInsertionPoint(cursor_pos + len(generated_code))
-```
-
-### Key Features
-- **Multi-Type Support**: Three code types with optimized HTML formatting for forum use
-- **User-Friendly Interface**: Simple dialog with clear labeling and intuitive layout
-- **Smart Integration**: Seamless integration with existing reply dialog functionality
-- **Focus Optimization**: Default focus on combo box for type selection, automatic focus return after insertion
-- **Keyboard Navigation**: Full keyboard accessibility with proper tab order and shortcuts
-- **Error Handling**: Input validation with user-friendly error messages
-
-### Testing Results
-- Verified all code types generate correct HTML output with proper formatting
-- Confirmed dynamic label updates work correctly for different code types
-- Tested code insertion at various cursor positions within existing content
-- Validated keyboard navigation and focus management across all dialog elements
-- Confirmed proper integration with existing reply dialog functionality
-
-21. **Context Menu Implementation and Improvements (2025-10-04)**
-    - Implemented comprehensive context menu functionality for thread lists using Application Key and right-click
-    - Added F5 refresh functionality with proper focus restoration to first item after refresh
-    - Enhanced copy functionality with direct display text extraction and system clipboard API
-    - Fixed critical usability issues affecting refresh behavior, copy operations, and clipboard persistence
-
-### Key Technical Improvements (Context Menu and Fixes)
-
-**Context Menu Implementation:**
-- **Menu Structure**: Implemented 4-item context menu with refresh, web open, copy title, copy URL functions
-- **Event Handling**: Added EVT_CONTEXT_MENU binding to DataViewListCtrl for proper menu display
-- **Keyboard Shortcuts**: Added global accelerator table entries for F5 (refresh), Ctrl+W (web), Ctrl+C (title), Ctrl+D (URL)
-- **Menu Display Logic**: Context menu only appears on valid thread items, not pagination controls
-
-**Focus Management Enhancement:**
-- **Refresh Focus**: Modified on_refresh method to save state and restore focus to first item after content reload
-- **Content-Type Specific Handling**: Implemented tailored refresh logic for each content type (thread_list, thread_detail, home_content, user_threads, user_posts, message_list, message_detail, search_result)
-- **Asynchronous Focus Restoration**: Used wx.CallAfter for reliable focus positioning after list updates
-- **State Preservation**: Enhanced saved_list_index mechanism for consistent focus behavior across all operations
-
-**Copy Functionality Overhaul:**
-- **Direct Text Extraction**: Changed from complex data processing to direct GetTextValue() from list display
-- **System Clipboard API**: Implemented cross-platform system clipboard usage (Windows clip, macOS pbcopy, Linux xclip/xsel)
-- **Text Cleaning**: Added intelligent removal of list numbering information (e.g., "，1之24项")
-- **Persistence**: Fixed clipboard content being cleared when application exits by using system-level clipboard operations
-
-**URL Construction Enhancement:**
-- **Dynamic URL Building**: Created build_thread_url method for reliable forum URL construction
-- **Forum Configuration Integration**: Uses current forum configuration for proper base URL handling
-- **Fallback Support**: Provides default zhengdu forum URL when configuration is unavailable
-- **Error Handling**: Comprehensive exception handling for all URL construction scenarios
-
-### Implementation Details
-
-**Context Menu Structure:**
-```
-┌─────────────────────────┐
-│ 刷新    F5             │
-│ ─────────────────────── │
-│ 网页打开(W) Ctrl+W     │
-│ 拷贝帖子标题 Ctrl+C    │
-│ 拷贝帖子地址 Ctrl+D    │
-└─────────────────────────┘
-```
-
-**Accelerator Table Entries:**
-```python
-accelerator_table = [
-    wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F5, 1005),      # F5 - 刷新
-    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W'), 1006),         # Ctrl+W - 网页打开
-    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('C'), 1007),         # Ctrl+C - 拷贝标题
-    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('D'), 1008),         # Ctrl+D - 拷贝地址
-]
-```
-
-**System Clipboard Implementation:**
-```python
-def copy_to_clipboard(self, text):
-    # Windows: subprocess.run(['clip'], input=text.encode('gbk'), shell=True)
-    # macOS: subprocess.run(['pbcopy'], input=text.encode('utf-8'))
-    # Linux: subprocess.run(['xclip', '-selection', 'clipboard'], input=text.encode('utf-8'))
-```
-
-**Focus Restoration Logic:**
-```python
-def on_refresh(self, event):
-    # Save focus state
-    self.saved_list_index = 0  # Focus on first item after refresh
-
-    # Content-type specific refresh with focus restoration
-    if self.current_content_type == 'thread_list':
-        self.load_forum_section_with_type(...)
-    elif self.current_content_type == 'user_threads':
-        self.load_my_threads_and_restore_focus()
-    # ... other content types
-```
-
-### Key Features
-- **Universal Access**: Context menu accessible via Application Key, right-click, or keyboard shortcuts
-- **Consistent Behavior**: Refresh operations maintain focus positioning across all content types
-- **Reliable Copy Operations**: Direct text extraction eliminates HTML processing issues
-- **Cross-Platform Clipboard**: System clipboard API ensures content persistence after application exit
-- **Error Resilience**: Comprehensive exception handling prevents application crashes
-- **Accessibility Compliance**: All functions maintain screen reader compatibility and keyboard navigation
-
-### Testing Results
-- Verified context menu appears correctly on thread items and not on pagination controls
-- Confirmed F5 refresh functionality restores focus to first item in all content types
-- Tested copy operations with various thread titles and URL formats
-- Validated clipboard content persists after application exit
-- Confirmed keyboard shortcuts work without conflicts with existing functionality
-- Tested cross-platform clipboard operations on Windows, macOS, and Linux systems
-- Verified screen reader compatibility with all new context menu features
-
-### Bug Fixes Addressed
-1. **Refresh Focus Issue**: Fixed refresh operation losing focus - now restores to first item
-2. **Copy Title Not Working**: Fixed copy functionality by switching to direct display text extraction
-3. **Clipboard Clear on Exit**: Fixed clipboard persistence by implementing system clipboard API
-4. **HTML Processing Problems**: Eliminated HTML tag cleaning issues by using pre-processed display text
-5. **Data Structure Dependencies**: Reduced reliance on internal data structures for improved reliability
-
-22. **User Content Pagination and Focus Fixes (2025-10-07)**
-    - Fixed critical user content pagination issue where "用户的发表" and "用户的回复" showed wrong page counts (33 pages instead of 65)
-    - Corrected content_type setting in user content loading methods to maintain proper pagination context
-    - Enhanced focus management for user content views to automatically focus on first item
-    - Implemented proper title restoration when exiting user content views
-    - Removed all debug output for cleaner user experience
-    - Eliminated intrusive notification dialogs when entering user content views
-
-### Key Technical Improvements (User Content Fixes)
-
-**Pagination Content Type Fix:**
-- **Root Cause**: `load_user_threads_and_restore_focus` and `load_user_posts_and_restore_focus` methods were calling `display_threads` without explicit content_type parameter
-- **Solution**: Added explicit content_type parameters ('user_threads' and 'user_posts') to maintain proper pagination context
-- **Impact**: Fixed page count display from incorrect 33 pages to correct 65 pages for user posts
-
-**Focus Management Enhancement:**
-- **Auto-Focus**: Added `wx.CallAfter(self.reset_keyboard_cursor, 0)` to both user content methods
-- **Consistency**: User content views now behave consistently with main thread list views
-- **Accessibility**: Maintains screen reader compatibility with automatic focus positioning
-
-**Title Restoration:**
-- **Exit Handling**: Enhanced `exit_user_content_mode` method to restore default title format when no previous state exists
-- **Default Format**: Restores to "{forum_name}-<{nickname}>-论坛助手" format
-- **Consistency**: Maintains consistent window title behavior across all navigation scenarios
-
-**Debug Cleanup:**
-- **Comprehensive Removal**: Removed all DEBUG print statements from event handlers, pagination methods, and context menu handlers
-- **User Experience**: Cleaner console output and improved application performance
-- **Production Ready**: Code is now suitable for production deployment without debug noise
-
-**Notification Removal:**
-- **Dialog Elimination**: Removed intrusive "正在查看 {username} 的主题/回复帖子，按退格键返回" notification dialogs
-- **Non-Intrusive Feedback**: Window title changes provide sufficient context without blocking dialogs
-- **User Experience**: Smoother navigation without disruptive popup notifications
-
-### Implementation Details
-
-**Fixed Method Calls:**
-```python
-# Before (problematic):
-self.display_threads(threadlist, pagination)
-
-# After (fixed):
-self.display_threads(threadlist, pagination, 'user_threads')
-self.display_threads(formatted_threads, pagination, 'user_posts')
-```
-
-**Focus Management Addition:**
-```python
-# Added to both user content methods:
-wx.CallAfter(self.reset_keyboard_cursor, 0)
-```
-
-**Title Restoration Logic:**
-```python
-def exit_user_content_mode(self):
-    # ... existing logic ...
-    else:
-        # If no previous thread detail state, restore to default title
-        self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
-```
-
-**Debug Output Removal:**
-- Removed all `print(f"DEBUG: ...")` statements from:
-  - `on_list_activated` method
-  - `on_list_context_menu` method
-  - `on_thread_list_context_menu` method
-  - `handle_row_activation` method
-  - `load_next_page` method
-  - All user content pagination handling
-
-**Notification Dialog Removal:**
-- Removed `self.show_info_message(f"正在查看 {username} 的主题帖子，按退格键返回")`
-- Removed `self.show_info_message(f"正在查看 {username} 的回复帖子，按退格键返回")`
-
-### Key Features
-- **Correct Pagination**: User content now displays correct page counts (65 pages instead of 33)
-- **Automatic Focus**: User content views automatically focus on first item for immediate keyboard navigation
-- **Clean Exit**: Exiting user content restores proper window title without manual intervention
-- **Debug-Free**: No debug output干扰用户体验
-- **Non-Intrusive**: No blocking notification dialogs when entering user content views
-- **Consistent Behavior**: All user content interactions follow established UI patterns
-
-### Testing Results
-- Verified user content pagination shows correct page counts (65 pages for user posts)
-- Confirmed automatic focus positioning works correctly in user content views
-- Tested title restoration when exiting user content views via backspace key
-- Validated absence of debug output in all user interactions
-- Confirmed notification dialogs no longer appear when entering user content
-- Verified keyboard navigation and screen reader compatibility maintained
-- Tested pagination controls work correctly with fixed content_type context
-
-23. **Post Detail Keyboard Shortcuts and Context Menu Letter Shortcuts Implementation (2025-10-09)**
-    - Fixed critical keyboard shortcuts not working in post detail view: Ctrl+Enter for reply and Shift+Enter for user profile viewing
-    - Implemented comprehensive context menu letter shortcuts system using standard wxPython `&` notation
-    - Enhanced data structure compatibility between normal mode and filter mode for robust field access
-    - Implemented event propagation control system to prevent multiple dialog opening
-    - Added letter-based shortcuts to all context menus throughout the application
-    - Enhanced user experience with standard Windows menu behavior where pressing letters activates menu items
-
-### Key Technical Improvements (Keyboard Shortcuts and Context Menu)
-
-**Post Detail Keyboard Shortcuts Fix:**
-- **Data Structure Compatibility**: Implemented compatibility layer for both `post_data` (normal mode) and `data` (filter mode) field structures
-- **Event Propagation Control**: Added direct return pattern without `event.Skip()` for handled keyboard events
-- **State Management**: Implemented flags with `wx.CallLater` cleanup to prevent duplicate dialog operations
-- **Smart Field Detection**: Added intelligent field name mapping (username/author, uid/authorid) for robust data access
-
-**Context Menu Letter Shortcuts Implementation:**
-- **Standard wxPython Notation**: Changed from incorrect `(K)` format to proper `(&K)` format for menu shortcuts
-- **Comprehensive Coverage**: Added letter shortcuts to all context menu items across different menu types
-- **Windows Standard Behavior**: Implemented standard menu behavior where pressing letters activates menu items when menu is open
-- **Menu Structure Enhancement**: Organized shortcuts logically and consistently across all context menus
-
-### Implementation Details
-
-**Fixed Keyboard Shortcuts in Post Detail View:**
-```python
-def on_list_key_down(self, event):
-    """处理键盘事件"""
-    keycode = event.GetKeyCode()
-
-    # 帖子详情页面的快捷键
-    if self.current_content_type == 'thread_detail':
-        # Ctrl+Enter: 回复选中楼层
-        if event.ControlDown() and keycode == wx.WXK_RETURN:
-            self.handle_reply_to_floor(selected_row)
-            return  # 直接返回，不调用event.Skip()
-
-        # Shift+Enter: 查看用户资料
-        if event.ShiftDown() and keycode == wx.WXK_RETURN:
-            self.handle_view_user_profile(selected_row)
-            return  # 直接返回，不调用event.Skip()
-```
-
-**Data Structure Compatibility Implementation:**
-```python
-def handle_reply_to_floor(self, selected_row):
-    """处理回复楼层功能"""
-    item_data = self.list_data[selected_row]
-
-    # 兼容两种数据结构：正常模式使用 'post_data'，筛选模式使用 'data'
-    if 'post_data' in item_data:
-        # 正常模式
-        post_data = item_data.get('post_data', {})
-    else:
-        # 筛选模式
-        post_data = item_data.get('data', {})
-
-    # 智能字段名检测
-    username = post_data.get('username') or post_data.get('author', '')
-    uid = post_data.get('uid') or post_data.get('authorid', '')
-```
-
-**Context Menu Letter Shortcuts Implementation:**
-```python
-# 帖子详情上下文菜单
-menu.Append(wx.ID_ANY, f"回复{username}(&R)")
-menu.Append(wx.ID_ANY, f"查看{username}的资料(&H)")
-menu.Append(wx.ID_ANY, f"筛选:只看{username}(&P)")
-menu.Append(wx.ID_ANY, f"编辑此楼层(&E)")
-menu.AppendSeparator()
-
-# 用户相关菜单
-user_menu.Append(wx.ID_ANY, f"只看{username}(&K)")
-user_menu.Append(wx.ID_ANY, f"他的全部帖子(&T)")
-
-# 帖子列表上下文菜单
-menu.Append(wx.ID_ANY, f"刷新(&R)")
-menu.Append(wx.ID_ANY, f"网页打开(&W)")
-menu.Append(wx.ID_ANY, f"拷贝帖子标题(&C)")
-menu.Append(wx.ID_ANY, f"拷贝帖子地址(&D)")
-```
-
-**Event Propagation Control System:**
-```python
-# 设置状态管理标记，防止重复处理
-self._handling_user_profile = True
-
-# 延迟清除标记
-def clear_flag():
-    self._handling_user_profile = False
-
-wx.CallLater(500, clear_flag)
-```
-
-### Key Features
-- **Fixed Post Detail Shortcuts**: Ctrl+Enter now works correctly for replying to posts in thread detail view
-- **Fixed User Profile Viewing**: Shift+Enter now properly opens user profile dialog without multiple duplicate dialogs
-- **Standard Menu Behavior**: Context menus now support standard Windows letter shortcut behavior
-- **Data Structure Robustness**: Enhanced compatibility with both normal and filter mode data structures
-- **Event Propagation Control**: Prevents multiple dialog opening and ensures proper event handling
-- **Comprehensive Shortcuts**: All context menus now have letter shortcuts for enhanced accessibility
-
-### Context Menu Shortcuts Structure
-
-**Post Detail Context Menu:**
-```
-┌─────────────────────────┐
-│ 回复张三(&R)             │
-│ 查看张三的资料(&H)       │
-│ 筛选:只看张三(&P)        │
-│ 编辑此楼层(&E)           │
-│ ─────────────────────── │
-│ 用户功能                 │
-│ ├── 只看张三(&K)         │
-│ └── 他的全部帖子(&T)     │
-│ ─────────────────────── │
-│ 查看他的其他回复(&F)     │
-│ 回复此楼层(&H)           │
-└─────────────────────────┘
-```
-
-**Thread List Context Menu:**
-```
-┌─────────────────────────┐
-│ 刷新(&R)                │
-│ ─────────────────────── │
-│ 网页打开(&W)             │
-│ 拷贝帖子标题(&C)         │
-│ 拷贝帖子地址(&D)         │
-└─────────────────────────┘
-```
-
-### Testing Results
-- Verified Ctrl+Enter shortcut works correctly for replying to posts in thread detail view
-- Confirmed Shift+Enter shortcut properly opens user profile dialog without duplicate dialogs
-- Tested context menu letter shortcuts work with standard Windows menu behavior
-- Validated data structure compatibility between normal and filter modes
-- Confirmed event propagation control prevents multiple dialog opening
-- Tested all context menu letter shortcuts across different menu types
-- Verified screen reader compatibility and keyboard navigation maintained
-
-### Bug Fixes Addressed
-1. **Ctrl+Enter Not Working**: Fixed data structure incompatibility and event propagation issues
-2. **Shift+Enter Multiple Dialogs**: Implemented event propagation control and state management
-3. **Context Menu Letter Shortcuts**: Changed from incorrect notation to standard wxPython `&` format
-4. **Data Structure Access**: Enhanced compatibility with both normal and filter mode field structures
-5. **Event Handling**: Implemented proper event propagation control to prevent duplicate operations
-
-### Technical Implementation Notes
-- Used wxPython standard `&` notation for menu shortcuts
-- Implemented state management with `wx.CallLater` for cleanup
-- Added intelligent field name detection for robust data access
-- Enhanced event handling with direct return pattern for handled events
-- Maintained backward compatibility with existing functionality
-- Preserved all accessibility features and screen reader compatibility
-
-24. **Navigation and Reply Experience Enhancements (2025-10-11)**
-    - Implemented thread list state preservation to prevent unnecessary refresh when navigating back from thread details
-    - Enhanced reply functionality to maintain current page position after posting replies
-    - Improved error handling for reply operations with detailed error message display
-    - Fixed critical navigation issues where users would lose their place when returning from thread details
-
-### Key Technical Improvements (Navigation and Reply Enhancements)
-
-**Thread List State Preservation:**
-- **Complete State Saving**: Enhanced `load_thread_detail()` to save complete list state including all display data, pagination info, and selection state
-- **Direct State Restoration**: Implemented `restore_saved_list_state()` method that restores list display without re-fetching from API
-- **Memory Management**: Used deep copying of list data to prevent reference issues and ensure clean state separation
-- **Performance Optimization**: Eliminated unnecessary API calls when returning to previous list views
-
-**Reply Page Position Maintenance:**
-- **Page State Tracking**: Modified reply methods to save current page number before posting and restore to same page after successful reply
-- **Selective State Saving**: Added `save_state` parameter to `load_thread_detail_and_restore_page()` to prevent state overwrite during refresh operations
-- **API Parameter Enhancement**: Updated forum client `post_reply()` method to return detailed success/error information instead of simple boolean
-- **Error Message Enhancement**: Implemented comprehensive error display showing specific failure reasons from API responses
-
-**Data Structure Improvements:**
-- **Complete Data Storage**: Enhanced `display_threads()` to save complete thread data in `list_data` for proper restoration
-- **Consistent Display Format**: Ensured restored lists use same display formatting as original lists
-- **Backward Compatibility**: Maintained existing data structures while adding new fields for enhanced functionality
-
-### Implementation Details
-
-**State Preservation System:**
-```python
-# 保存完整的列表状态
+# State preservation for navigation
 self.saved_list_state = {
-    'list_data': self.list_data.copy(),  # 深拷贝列表数据
+    'list_data': self.list_data.copy(),
     'current_pagination': getattr(self, 'current_pagination', {}).copy(),
     'current_content_type': getattr(self, 'current_content_type', ''),
-    'current_forum': getattr(self, 'current_forum', ''),
-    'current_fid': getattr(self, 'current_fid', None),
-    'current_keyword': getattr(self, 'current_keyword', ''),
-    'current_orderby': getattr(self, 'current_orderby', 'latest'),
     'selected_index': selected if selected != -1 else 0,
     'window_title': self.GetTitle()
 }
 ```
 
-**Enhanced Reply Flow:**
+### API Response Handling
 ```python
-# 保存当前页面状态，用于回复后恢复到相同页面
-current_page = getattr(self, 'current_pagination', {}).get('page', 1)
-current_tid = self.current_tid
-
-# 回复成功后刷新并保持页面位置
-self.load_thread_detail_and_restore_page(current_tid, current_page, save_state=False)
-```
-
-**Improved Error Handling:**
-```python
-# API返回详细错误信息
-def post_reply(self, forum_name, fid, tid, content, pid=None):
-    # ... API调用逻辑
-    if result.get('status') == 1:
-        return {"success": True, "error": None}
-    else:
-        error_message = result.get('message', '回复发送失败')
-        return {"success": False, "error": error_message}
-```
-
-### Key Features
-- **No Refresh Navigation**: Backspace navigation from thread details returns to exact previous list state without API refresh
-- **Page Position Preservation**: Reply operations maintain current page position, showing new content without losing user's place
-- **Detailed Error Feedback**: Reply failures show specific error messages (network issues, API errors, content restrictions, etc.)
-- **Consistent User Experience**: All navigation and reply operations follow predictable patterns that match user expectations
-- **Performance Optimized**: Reduced API calls and faster navigation through state preservation
-
-### Testing Results
-- Verified thread list state preservation works correctly across all content types (thread_list, user_threads, user_posts, search_result, home_content)
-- Confirmed reply operations maintain page position and properly refresh to show new content
-- Tested error handling displays appropriate messages for various failure scenarios (network errors, API errors, invalid content)
-- Validated backspace navigation returns to exact previous state without unwanted refresh behavior
-- Confirmed data integrity with complete thread information display in restored lists
-- Tested compatibility with existing features including pagination, search, and user content views
-
-### Bug Fixes Addressed
-1. **Page Refresh on Back Navigation**: Fixed issue where backspace from thread details would refresh list and return to page 1
-2. **Reply Page Position Loss**: Fixed issue where replying on page 2+ would return to page 1 after successful reply
-3. **State Overwrite During Refresh**: Fixed issue where reply refresh operations would overwrite navigation state
-4. **Incomplete List Restoration**: Fixed issue where restored lists showed empty or incomplete thread information
-5. **Generic Error Messages**: Fixed issue where reply failures only showed generic "回复发送失败" without specific reasons
-
-25. **Thread Detail Refresh Page Position Fix (2025-10-11)**
-    - Fixed critical F5 refresh issue in thread detail where refreshing would return to page 1 regardless of current page
-    - Enhanced refresh logic to preserve current page position when refreshing thread detail content
-    - Implemented proper state management to prevent navigation state overwrite during refresh operations
-    - Improved user experience by maintaining browsing context during refresh operations
-
-### Key Technical Improvements (Thread Detail Refresh Fix)
-
-**Page Position Preservation:**
-- **Current Page Detection**: Enhanced refresh logic to capture current page number before API call
-- **API Parameter Correction**: Fixed API call to always pass target page parameter, ensuring correct page content retrieval
-- **State Management Control**: Added `save_state=False` parameter to prevent navigation state overwrite during refresh
-- **Consistent Behavior**: Ensured refresh operations maintain user's current browsing position
-
-**Refresh Flow Optimization:**
-- **Page Parameter Passing**: Modified `load_thread_detail_and_restore_page` to always use target page parameter
-- **API Call Consistency**: Ensured API calls always receive page parameter, eliminating default-to-page-1 behavior
-- **Navigation Integrity**: Maintained proper backspace navigation behavior while fixing refresh functionality
-- **User Context Preservation**: Kept users on the same page when refreshing multi-page thread details
-
-### Implementation Details
-
-**Fixed Refresh Logic:**
-```python
-# 修改前：当target_page为1时，不传递页面参数
-if target_page > 1:
-    result = self.forum_client.get_thread_detail(self.current_forum, tid, target_page)
-else:
-    result = self.forum_client.get_thread_detail(self.current_forum, tid)
-
-# 修改后：总是传递页面参数，确保刷新后保持在同一页
-result = self.forum_client.get_thread_detail(self.current_forum, tid, target_page)
-```
-
-**Enhanced Refresh Handler:**
-```python
-elif self.current_content_type == 'thread_detail':
-    # 重新加载帖子详情 - 使用save_state=False避免覆盖导航状态
-    if hasattr(self, 'current_thread_info') and self.current_thread_info:
-        tid = self.current_thread_info.get('tid')
-        current_page = getattr(self, 'current_pagination', {}).get('page', 1)
-        if tid:
-            self.load_thread_detail_and_restore_page(tid, current_page, save_state=False)
-```
-
-### Key Features
-- **Page Position Memory**: F5 refresh in thread detail maintains current page position
-- **Navigation State Integrity**: Backspace navigation continues to work correctly after refresh
-- **Consistent API Behavior**: API calls always receive proper page parameters
-- **User Experience Enhancement**: Users no longer lose their place when refreshing multi-page threads
-- **Backward Compatibility**: All existing functionality preserved while fixing refresh behavior
-
-### Testing Results
-- Verified F5 refresh on page 2+ of thread detail maintains current page position
-- Confirmed backspace navigation works correctly after refresh operations
-- Tested refresh behavior across different thread lengths and page numbers
-- Validated API parameter passing ensures correct content retrieval
-- Confirmed navigation state management prevents state overwrite issues
-- Tested compatibility with existing thread detail features (reply, user profile, etc.)
-
-### Bug Fixes Addressed
-1. **Refresh Page Position Loss**: Fixed issue where F5 refresh in thread detail would return to page 1
-2. **API Parameter Inconsistency**: Fixed API call to always pass page parameter for consistent behavior
-3. **Navigation State Overwrite**: Enhanced refresh logic to prevent navigation state corruption
-
-26. **"只看他"筛选功能完整实现 (2025-10-12)**
-    - 实现了完整的用户回复筛选功能，支持按原帖子分页结构进行筛选浏览
-    - 保持原始楼层号显示（2楼、5楼、8楼等），不重新编号，维持用户对帖子结构的认知
-    - 实现了两种退出筛选模式的方式：退格键直接返回列表、树视图导航自动退出
-    - 优化了用户导航流程，减少了操作步骤，提升了整体使用体验
-
-### Key Technical Improvements ("只看他"筛选功能)
-
-**原分页结构保持：**
-- **前端筛选逻辑**：修改API调用方式，获取整页数据后在前端筛选目标用户回复
-- **分页信息准确**：使用原帖子的分页信息（第1页/共5页），不是筛选结果的分页
-- **楼层号完整性**：保持API返回的原始楼层号，用户能清楚知道回复在原帖子中的位置
-
-**界面体验优化：**
-- **空页面处理**：某页没有目标用户回复时，只显示分页控制，无干扰性提示
-- **窗口标题简化**：筛选模式下显示"论坛-<用户昵称>-论坛助手 (只看用户名)"，不显示帖子标题
-- **分页信息增强**：分页控制显示筛选状态，如"第1页/共5页（只看张三）"
-
-**导航流程优化：**
-- **直接返回列表**：筛选模式按退格键直接返回之前的帖子列表，无需经过帖子详情页面
-- **树视图自动退出**：点击树视图其他项目时自动退出筛选模式，加载新内容
-- **无刷新状态恢复**：返回列表时不重新调用API，保持原有位置和选中状态
-
-**状态管理增强：**
-- **完整状态保存**：利用现有的`saved_list_state`机制，在进入帖子详情时保存完整的列表状态
-- **智能状态恢复**：筛选模式退出时直接恢复保存的列表数据，避免数据丢失
-- **兼容性保障**：与现有的状态管理系统无缝集成，不影响其他功能
-
-### Implementation Details
-
-**前端筛选逻辑实现：**
-```python
-# 获取整页数据后在前端筛选
-result = self.forum_client.get_thread_detail(self.current_forum, tid, page=current_page)
-all_posts = result.get('postlist', [])
-
-# 前端筛选目标用户的回复
-filter_username = self.filter_mode.get('username', '')
-filtered_posts = [post for post in all_posts if post.get('username', '') == filter_username]
-```
-
-**楼层号保持实现：**
-```python
-# 使用API返回的原始楼层号字段
-floor_number = post.get('floor', 1)
-if floor_number == 1:
-    display_text = f"楼主 {username} 说\n{clean_message}\n发表时间：{dateline}"
-else:
-    display_text = f"{floor_number}楼 {username} 说\n{clean_message}\n发表时间：{dateline}"
-```
-
-**导航退出实现：**
-```python
-def exit_filter_mode_to_list(self):
-    """退出筛选模式，直接返回帖子列表"""
-    # 清除筛选模式
-    self.filter_mode = None
-
-    # 恢复窗口标题
-    self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
-
-    # 直接返回到之前的列表状态（无刷新）
-    self.go_back_to_previous_list()
-```
-
-### Key Features
-- **原分页结构**：完全按照原帖子的分页方式（1-20楼、21-40楼...）进行筛选浏览
-- **原始楼层号**：2楼就是2楼，不会重新编号，保持用户对帖子结构的认知
-- **高效导航**：筛选模式→退格键→直接返回列表，减少操作步骤
-- **无干扰体验**：空页面只显示分页控制，界面简洁一致
-- **状态保持**：返回列表时保持原有位置和选中项，无需重新加载
-
-### Testing Results
-- 验证筛选模式按原分页结构正确显示用户回复
-- 确认楼层号显示准确，保持原始编号（2楼、5楼、8楼等）
-- 测试退格键直接返回帖子列表，功能正常工作
-- 验证树视图导航自动退出筛选模式
-- 确认返回列表时保持原有状态，无数据丢失
-- 测试分页控制筛选模式正常工作（上一页/下一页/跳转页码）
-- 验证所有现有功能与筛选模式兼容性良好
-
-### User Experience Flow
-**完整操作流程：**
-1. 帖子列表 → 点击帖子 → 帖子详情（保存列表状态）
-2. 帖子详情 → 右键用户回复 → "只看张三" → 筛选模式
-3. 筛选模式：按原分页浏览（1-20楼：显示2、5、8楼；21-40楼：显示21、22、30楼；41-60楼：无回复，只显示分页控制）
-4. 筛选模式 → 按退格键 → 直接返回原帖子列表（无刷新，保持原位置）
-
-27. **楼层浏览对话框稳定性修复和HTML解析增强 (2025-10-13)**
-    - 修复了楼层浏览对话框的重复弹窗问题，确保对话框状态正确管理
-    - 增强了HTML解析的异常处理能力，防止特定音频标签格式导致的崩溃
-    - 修复了对话框状态管理，防止状态标志未正确重置的问题
-    - 移除了所有冗余的调试输出，提升了用户体验和程序性能
-    - 优化了资源提取的容错性，确保在遇到异常HTML结构时能优雅降级
-
-### Key Technical Improvements (楼层浏览对话框稳定性修复)
-
-**重复弹窗问题修复：**
-- **状态管理增强**：在`show_floor_editor`方法中加强了`_floor_dialog_open`状态管理
-- **异常处理完善**：添加了完整的try-catch-finally结构，确保在任何异常情况下都能正确重置状态
-- **早期验证**：在方法开始就进行数据验证，避免无效操作
-- **状态重置保证**：使用finally块确保状态标志总是被正确重置
-
-**HTML解析异常处理增强：**
-- **多层异常保护**：为`parse_floor_content_and_extract_resources`方法添加了完整的异常处理层次
-- **优雅降级机制**：当HTML解析失败时，自动回退到基础的HTML清理功能
-- **函数级异常处理**：每个资源提取函数都有独立的异常处理，防止单点故障
-- **编码容错**：增强了字符串处理过程中的编码错误处理能力
-
-**调试输出清理：**
-- **全面移除**：删除了所有冗长的DEBUG打印语句，特别是HTML解析过程中的调试信息
-- **关键信息保留**：只保留关键的错误信息用于故障排除
-- **性能提升**：减少了控制台输出，提升了程序运行性能
-- **用户体验优化**：消除了调试噪音，提供了更干净的用户体验
-
-### Implementation Details
-
-**状态管理修复：**
-```python
-def show_floor_editor(self, floor_index):
-    try:
-        # 早期验证和状态检查
-        if hasattr(self, '_floor_dialog_open') and self._floor_dialog_open:
-            return
-
-        # 设置状态
-        self._floor_dialog_open = True
-
-        # 主要功能逻辑
-        # ...
-
-    except Exception as e:
-        # 确保在错误情况下也重置状态
-        self._floor_dialog_open = False
-    finally:
-        # 确保状态被重置
-        self._floor_dialog_open = False
-```
-
-**HTML解析异常处理增强：**
-```python
-def parse_floor_content_and_extract_resources(self, html_content):
-    try:
-        # 完整的HTML解析逻辑
-        # 包括链接、音频、图片提取
-        # HTML实体处理
-        # 资源位置映射
-        return clean_text, resources, resource_map
-    except Exception as e:
-        # 优雅降级到基础HTML清理
-        print(f"[DEBUG] HTML解析整体失败，使用基础清理: {e}")
-        clean_text = self.clean_html_tags(html_content)
-        return clean_text, [], {}
-```
-
-**函数级异常处理：**
-```python
-def extract_audio(match):
-    try:
-        # 音频资源提取逻辑
-        groups = match.groups()
-        # 处理不同的音频标签格式
-        return resource_name
-    except Exception:
-        return match.group(0) if match else ""
-```
-
-### Key Features
-- **稳定性保证**：楼层浏览对话框现在能稳定处理各种HTML内容，包括包含复杂音频标签的帖子
-- **异常恢复**：当遇到异常HTML结构时，系统能优雅降级到基础功能，不会崩溃
-- **状态一致性**：对话框状态管理现在完全可靠，不会出现状态标志未重置的问题
-- **性能优化**：移除了冗余调试输出，提升了程序整体性能
-- **用户体验**：消除了调试噪音，提供了更流畅和稳定的使用体验
-
-### Testing Results
-- 验证了包含音频标签的帖子能正常打开楼层浏览对话框
-- 确认了重复弹窗问题已完全解决
-- 测试了各种异常HTML内容下的优雅降级行为
-- 验证了状态管理在所有场景下都正确工作
-- 确认了程序运行时不再有冗余的调试输出
-- 测试了所有资源提取功能在异常情况下的稳定性
-
-### Bug Fixes Addressed
-1. **重复弹窗问题**：修复了`_floor_dialog_open`状态管理不当导致的重复弹窗
-2. **HTML解析崩溃**：修复了特定音频标签格式导致的解析方法崩溃
-3. **状态重置失败**：修复了异常情况下状态标志未正确重置的问题
-4. **调试输出噪音**：移除了所有冗余的调试print语句
-5. **异常传播**：修复了异常处理不当导致的问题传播
-
-28. **用户内容导航完整实现 (2025-10-15)**
-    - 实现了完整的用户内容导航体系，支持多层级导航和状态管理
-    - 修复了用户内容退出时的焦点位置和页面位置保持问题
-    - 实现了从用户内容打开帖子后的正确返回逻辑，支持页面位置和焦点记忆
-    - 增强了导航状态管理，确保在用户内容中的多次操作不会覆盖原始导航状态
-    - 统一了窗口标题格式，保持原有的"论坛名字-<用户名>-论坛助手"格式
-    - 实现了从用户内容第二页或更高页面的精确返回功能
-
-### Key Technical Improvements (用户内容导航完整实现)
-
-**导航状态管理增强：**
-- **键盘事件处理优先级修复**：修复了键盘事件处理中的优先级冲突问题，确保从用户内容进入的帖子详情能正确返回用户内容列表
-- **状态保存机制完善**：实现了 `user_content_state_before_thread` 状态保存，记录用户内容模式、页码、焦点位置等信息
-- **原始状态保护**：在 `user_content_state_before_thread` 中保存 `original_thread_state`，避免多次用户内容操作覆盖原始帖子详情状态
-
-**用户内容加载方法增强：**
-- **页码参数支持**：修改 `load_user_threads_and_restore_focus` 和 `load_user_posts_and_restore_focus` 方法，支持指定页码参数
-- **页面位置记忆**：从用户内容的第N页打开帖子后，返回时能正确回到第N页，而不是总是回到第1页
-- **焦点位置保持**：保存和恢复用户内容列表中的选中项位置，提供精确的焦点管理
-
-**返回逻辑完整实现：**
-- **多层返回支持**：帖子详情 → 用户内容 → 帖子详情 → 用户内容 → 退格键 → 用户内容列表 → 退格键 → 原始帖子详情
-- **状态切换机制**：实现了 `load_thread_detail_from_user_content` 方法，清除 `user_content_mode` 避免键盘事件处理冲突
-- **页面和焦点恢复**：`return_to_user_content` 方法支持同时恢复页面位置和焦点位置
-
-### Implementation Details
-
-**状态保存结构：**
-```python
-self.user_content_state_before_thread = {
-    'user_content_mode': getattr(self, 'user_content_mode', None),
-    'current_content_type': getattr(self, 'current_content_type', ''),
-    'current_uid': getattr(self, 'current_uid', None),
-    'selected_index': self.list_ctrl.GetSelectedRow() if self.list_ctrl.GetSelectedRow() != -1 else 0,
-    'current_page': getattr(self, 'current_pagination', {}).get('page', 1),
-    'original_thread_state': getattr(self, 'previous_state', None)  # 保存原始状态
+# Standard API response structure
+message = result.get('message', {})
+threadlist = message.get('threadlist', [])
+pagination = {
+    'page': message.get('page', 1),
+    'totalpage': message.get('totalpage', 1)
 }
 ```
 
-**键盘事件处理修复：**
+### Display Format
 ```python
-def load_thread_detail_from_user_content(self, tid):
-    # 保存状态后立即清除 user_content_mode，避免键盘事件处理冲突
-    self.user_content_state_before_thread = {...}
-    self.user_content_mode = None  # 关键修复点
-    self.load_thread_detail_and_restore_page(tid, 1, save_state=False)
+# Standard list item display format
+display_text = f"{title} 作者:{author};浏览:{views};板块:{forum};发表时间:{time};回复:{replies};回复时间:{reply_time};最后回复:{last_user}"
 ```
 
-**用户内容加载方法增强：**
+### Keyboard Event Handling
 ```python
-def load_user_threads_and_restore_focus(self, uid, page=1):
-    # 新增页码参数支持
-    result = self.forum_client.get_user_threads(self.current_forum, uid, page=page)
-    # ... 其他逻辑保持不变
+# Post detail keyboard shortcuts
+if event.ControlDown() and keycode == wx.WXK_RETURN:
+    self.handle_reply_to_floor(selected_row)
+    return  # Prevent event propagation
 
-def load_user_posts_and_restore_focus(self, uid, page=1):
-    # 新增页码参数支持
-    result = self.forum_client.get_user_posts(self.current_forum, uid, page=page)
-    # ... 其他逻辑保持不变
+if event.ShiftDown() and keycode == wx.WXK_RETURN:
+    self.handle_view_user_profile(selected_row)
+    return
 ```
 
-**返回逻辑完整实现：**
-```python
-def return_to_user_content(self):
-    # 使用保存的原始状态，而不是当前状态
-    original_thread_state = state.get('original_thread_state')
-    if original_thread_state:
-        self.previous_state = original_thread_state
+## Menu Structure and Shortcuts
 
-    # 恢复到指定页面和焦点
-    target_page = state.get('current_page', 1)
-    selected_index = state.get('selected_index', 0)
-
-    if content_type == 'user_threads':
-        self.load_user_threads_and_restore_focus(uid, page=target_page)
-    elif content_type == 'user_posts':
-        self.load_user_posts_and_restore_focus(uid, page=target_page)
+### File Menu
+```
+文件(&F)                    Alt+F
+├── 账户管理(&M)            Ctrl+M
+├── 切换账户(&Q)            Ctrl+Q
+├── 设置(&P)                Ctrl+P
+└── 退出(&X)                Alt+F4
 ```
 
-### Key Features
-- **完整导航支持**：支持 帖子列表 → 帖子详情 → 用户内容 → 帖子详情 → 用户内容 → 退格键 → 用户内容列表 → 退格键 → 原始帖子详情 的完整导航流程
-- **页面位置记忆**：从用户内容的任何页面打开帖子，返回时都能精确回到原来的页面
-- **焦点位置保持**：在用户内容列表中选中的项目位置会被保存和恢复
-- **状态保护机制**：多次在用户内容中操作不会覆盖原始帖子详情状态
-- **标题格式统一**：保持原有的"论坛名字-<用户名>-论坛助手"格式，仅在用户内容时添加括号标识
-
-### Testing Results
-- 验证了完整的用户内容导航流程，所有退格键操作都能正确工作
-- 确认了从用户内容第二页及更高页面的精确返回功能
-- 测试了多次在用户内容中打开不同帖子后的状态保持
-- 验证了窗口标题格式的一致性和正确变化
-- 确认了焦点位置的准确恢复，包括页码和选中项位置
-- 测试了与现有功能的兼容性，包括筛选模式、搜索功能等
-
-### Bug Fixes Addressed
-1. **用户内容退出问题**：修复了从用户内容退出时跳过用户内容列表直接回到帖子详情的问题
-2. **页面位置丢失**：修复了从用户内容第N页返回时总是回到第1页的问题
-3. **状态覆盖问题**：修复了多次用户内容操作覆盖原始帖子详情状态的问题
-4. **键盘事件冲突**：修复了 `user_content_mode` 状态导致的键盘事件处理优先级冲突
-5. **标题格式变化**：恢复了原有的窗口标题格式，保持界面一致性
-
-29. **状态保存逻辑修复 (2025-10-15)**
-    - 修复了从板块列表进入帖子详情后按退格键无法返回原列表的问题
-    - 恢复到参考版本d668099的核心状态保存逻辑，确保状态保存的一致性和可靠性
-    - 移除了过度修改的状态保存排除条件，恢复简单的条件判断逻辑
-    - 修复了load_content方法调用错误，确保所有列表类型都使用正确的加载方法
-    - 完全保持用户内容导航功能不受影响，确保用户内容的多层级导航正常工作
-
-### Key Technical Improvements (状态保存逻辑修复)
-
-**状态保存条件恢复：**
-- **参考版本对齐**：将状态保存条件恢复为参考版本的简单逻辑 `if save_state and hasattr(self, 'current_content_type')`
-- **移除排除条件**：删除了 `and self.current_content_type not in ['user_threads', 'user_posts']` 的过度限制
-- **用户功能保护**：用户内容专用方法继续使用 `save_state=False`，保持专用导航逻辑不变
-
-**加载方法修复：**
-- **方法调用修正**：修复了 `load_content` 方法中的调用错误，使用基础版本而非 `and_restore_focus` 版本
-- **焦点管理优化**：移除了之前添加的多余焦点设置代码，恢复到参考版本的简洁逻辑
-- **状态管理统一**：确保所有列表类型（板块列表、最新发表、最新回复等）都使用统一的状态管理方式
-
-**代码结构清理：**
-- **多余代码移除**：删除了在各个 `and_restore_focus` 方法中添加的 `wx.CallAfter(self.reset_keyboard_cursor, 0)` 调用
-- **逻辑简化**：回到了参考版本经过验证的简单、可靠的状态管理方式
-- **向后兼容**：所有现有功能都得到保持，同时修复了状态保存问题
-
-### Implementation Details
-
-**状态保存条件恢复：**
-```python
-# 修改前（过度复杂）：
-if save_state and hasattr(self, 'current_content_type') and self.current_content_type not in ['user_threads', 'user_posts']:
-
-# 修改后（参考版本）：
-if save_state and hasattr(self, 'current_content_type'):
+### Help Menu
+```
+帮助(&H)                    Alt+H
+└── 关于(&A)                F1
 ```
 
-**加载方法修复：**
-```python
-# 修改前（错误调用）：
-if text == "最新发表":
-    self.load_latest_threads_and_restore_focus()
-elif text == "最新回复":
-    self.load_latest_replies_and_restore_focus()
-else:
-    self.load_forum_section_and_restore_focus(text, fid)
+### Context Menu Shortcuts
+- **Thread List**: 刷新(&R), 网页打开(&W), 拷贝帖子标题(&C), 拷贝帖子地址(&D)
+- **Post Detail**: 回复用户(&R), 查看资料(&H), 筛选只看(&P), 编辑楼层(&E)
 
-# 修改后（正确调用）：
-if text == "最新发表":
-    self.load_latest_threads()
-elif text == "最新回复":
-    self.load_latest_replies()
-else:
-    self.load_forum_section(text, fid)
+## Development Best Practices
+
+### Code Organization
+- Keep state management logic centralized in MainFrame
+- Use consistent error handling patterns across all methods
+- Maintain separation between API calls and UI updates
+- Implement proper focus management for all interactive elements
+
+### Testing Strategy
+- Test all navigation flows with real forum data
+- Verify keyboard accessibility across all features
+- Test state restoration after various navigation scenarios
+- Validate screen reader compatibility
+
+### Performance Considerations
+- Use DataViewListCtrl for efficient large list handling
+- Implement pagination to avoid loading excessive data
+- Cache frequently accessed data to reduce API calls
+- Use background threads for long-running operations
+
+### Error Handling
+- Implement graceful degradation for API failures
+- Provide user-friendly error messages
+- Use try-catch blocks around all external API calls
+- Maintain application stability during network issues
+
+## Configuration Management
+
+### Settings Structure
+```ini
+[Settings]
+show_list_numbers = false
+
+[Forum_争渡论坛]
+url = http://www.zd.hk/
+username1 = user1
+nickname1 = 用户1
+password1 = [encrypted]
 ```
 
-**用户功能保护：**
-```python
-# 用户内容专用方法保持不变
-def load_thread_detail_from_user_content(self, tid):
-    # 保存用户内容状态
-    self.user_content_state_before_thread = {...}
-    # 清除 user_content_mode 避免键盘事件处理冲突
-    self.user_content_mode = None
-    # 使用 save_state=False 保持专用逻辑
-    self.load_thread_detail_and_restore_page(tid, 1, save_state=False)
-```
-
-### Key Features
-- **状态保存修复**：从板块列表进入帖子详情后，按退格键能正确返回原列表
-- **用户功能保护**：用户内容的所有导航功能（发表/回复）完全保持原有行为
-- **逻辑简化**：回到了经过验证的简单、可靠的状态管理方式
-- **向后兼容**：所有现有功能都得到保持，包括筛选模式、搜索功能等
-- **稳定性提升**：消除了状态保存的不一致性，提高了整体导航稳定性
-
-### Testing Results
-- 验证了从所有板块列表（包括最新发表、最新回复、我的发表、我的回复）进入帖子详情后，按退格键都能正确返回原列表
-- 确认了用户内容导航功能完全不受影响，所有用户内容相关的功能都正常工作
-- 测试了筛选模式在修复后仍然正常工作
-- 验证了搜索功能的返回导航正常
-- 确认了与现有所有功能的兼容性，没有引入新的问题
-
-### Bug Fixes Addressed
-1. **板块列表返回问题**：修复了从板块列表进入帖子详情后按退格键无法返回的问题
-2. **状态保存不一致**：修复了不同内容类型状态保存逻辑不一致的问题
-3. **加载方法调用错误**：修复了 `load_content` 方法中调用错误的方法版本
-4. **过度复杂逻辑**：简化了过度复杂的状态保存条件判断逻辑
-5. **焦点设置冗余**：移除了不必要的焦点设置代码，恢复了简洁的实现
+### Security Considerations
+- All passwords stored with AES encryption
+- No persistent credentials except encrypted passwords
+- Session cookies stored in memory only
+- Secure API key management
