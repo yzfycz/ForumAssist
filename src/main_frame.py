@@ -859,6 +859,9 @@ class MainFrame(wx.Frame):
 
     def load_latest_threads_and_restore_focus(self):
         """加载最新发表并恢复焦点"""
+        # 保存当前状态，用于退格键返回
+        self.save_current_state()
+
         result = self.forum_client.get_home_content(self.current_forum, "latest")
         self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
         self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
@@ -866,6 +869,9 @@ class MainFrame(wx.Frame):
 
     def load_latest_replies_and_restore_focus(self):
         """加载最新回复并恢复焦点"""
+        # 保存当前状态，用于退格键返回
+        self.save_current_state()
+
         result = self.forum_client.get_home_content(self.current_forum, "lastpost")
         self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
         self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
@@ -1900,9 +1906,9 @@ class MainFrame(wx.Frame):
 
         # 根据选择的树节点加载相应内容
         if text == "最新发表":
-            self.load_latest_threads()
+            self.load_latest_threads_and_restore_focus()
         elif text == "最新回复":
-            self.load_latest_replies()
+            self.load_latest_replies_and_restore_focus()
         elif text == "我的发表":
             self.load_my_threads_and_restore_focus()
         elif text == "我的回复":
