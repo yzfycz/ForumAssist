@@ -5713,7 +5713,14 @@ class MainFrame(wx.Frame):
         content_type = state.get('current_content_type')
         uid = state.get('current_uid')
 
-        if not user_content_mode or not uid:
+        # 检查是否是有效的用户内容
+        # 对于"我的发表"和"我的回复"，user_content_mode为None，但content_type应该是user_threads或user_posts
+        if not uid:
+            return
+
+        # 如果不是查看其他用户内容，而是查看自己的内容，不需要user_content_mode
+        is_my_content = content_type in ['user_threads', 'user_posts']
+        if not is_my_content and not user_content_mode:
             return
 
         # 使用保存的原始帖子详情状态，而不是当前的
@@ -5731,8 +5738,14 @@ class MainFrame(wx.Frame):
                 'user_content_mode': None
             }
 
-        # 恢复用户内容模式
-        self.user_content_mode = user_content_mode
+        # 恢复用户内容模式（仅对于查看其他用户的内容）
+        if is_my_content:
+            # 对于"我的发表"和"我的回复"，不设置user_content_mode
+            self.user_content_mode = None
+        else:
+            # 对于查看其他用户内容，设置user_content_mode
+            self.user_content_mode = user_content_mode
+
         self.current_content_type = content_type
         self.current_uid = uid
 
