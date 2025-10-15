@@ -859,29 +859,26 @@ class MainFrame(wx.Frame):
 
     def load_latest_threads_and_restore_focus(self):
         """加载最新发表并恢复焦点"""
-        # 保存当前状态，用于退格键返回
-        self.save_current_state()
-
         result = self.forum_client.get_home_content(self.current_forum, "latest")
         self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
         self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
         self.current_orderby = 'latest'
 
-    def load_latest_replies_and_restore_focus(self):
-        """加载最新回复并恢复焦点"""
-        # 保存当前状态，用于退格键返回
+        # 在内容加载后保存状态，确保 current_content_type 已正确设置
         self.save_current_state()
 
+    def load_latest_replies_and_restore_focus(self):
+        """加载最新回复并恢复焦点"""
         result = self.forum_client.get_home_content(self.current_forum, "lastpost")
         self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
         self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'home_content')
         self.current_orderby = 'lastpost'
 
-    def load_my_threads_and_restore_focus(self):
-        """加载我的发表并恢复焦点"""
-        # 保存当前状态，用于退格键返回
+        # 在内容加载后保存状态，确保 current_content_type 已正确设置
         self.save_current_state()
 
+    def load_my_threads_and_restore_focus(self):
+        """加载我的发表并恢复焦点"""
         user_info = self.auth_manager.get_user_info(self.current_forum)
         if user_info:
             uid = user_info.get('uid')
@@ -892,11 +889,11 @@ class MainFrame(wx.Frame):
                 self.display_threads_and_restore_focus(result.get('threadlist', []), result.get('pagination', {}), 'user_threads')
                 self.current_orderby = 'latest'
 
+                # 在内容加载后保存状态，确保 current_content_type 已正确设置
+                self.save_current_state()
+
     def load_my_posts_and_restore_focus(self):
         """加载我的回复并恢复焦点"""
-        # 保存当前状态，用于退格键返回
-        self.save_current_state()
-
         user_info = self.auth_manager.get_user_info(self.current_forum)
         if user_info:
             uid = user_info.get('uid')
@@ -928,6 +925,9 @@ class MainFrame(wx.Frame):
 
                 self.SetTitle(f"{self.current_forum}-<{self.get_user_nickname()}>-论坛助手")
                 self.display_threads_and_restore_focus(formatted_threads, result.get('pagination', {}), 'user_posts')
+
+                # 在内容加载后保存状态，确保 current_content_type 已正确设置
+                self.save_current_state()
 
     def search_content_and_restore_focus(self, keyword):
         """搜索内容并恢复焦点"""
@@ -5360,7 +5360,7 @@ class MainFrame(wx.Frame):
     def save_current_state(self):
         """保存当前状态，用于返回导航"""
         self.previous_state = {
-            'content_type': self.current_content_type,
+            'content_type': getattr(self, 'current_content_type', None),
             'tid': getattr(self, 'current_tid', None),
             'selected_index': getattr(self, 'saved_list_index', 0),
             'page': getattr(self, 'current_page', 1),
