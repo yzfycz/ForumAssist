@@ -797,6 +797,8 @@ class MainFrame(wx.Frame):
     def go_back_to_previous_list(self):
         """返回之前的列表"""
         try:
+            # 确保清除用户内容状态，避免影响后续导航
+            self.user_content_state_before_thread = None
             # 优先尝试恢复保存的完整列表状态（不刷新）
             if hasattr(self, 'saved_list_state') and self.saved_list_state:
                 state = self.saved_list_state
@@ -2427,6 +2429,8 @@ class MainFrame(wx.Frame):
 
     def load_thread_detail(self, tid):
         """加载帖子详情"""
+        # 确保清除用户内容状态，避免影响普通导航
+        self.user_content_state_before_thread = None
         self.load_thread_detail_and_restore_page(tid, 1)
 
     def load_thread_detail_from_user_content(self, tid):
@@ -5343,21 +5347,11 @@ class MainFrame(wx.Frame):
 
     def save_current_state(self):
         """保存当前状态，用于返回导航"""
-        # 获取当前选中的索引
-        current_selected = self.list_ctrl.GetSelectedRow()
-        if current_selected == -1:
-            current_selected = getattr(self, 'saved_list_index', 0)
-
-        # 获取当前页码 - 从分页信息中获取
-        current_page = 1
-        if hasattr(self, 'current_pagination') and self.current_pagination:
-            current_page = self.current_pagination.get('page', 1)
-
         self.previous_state = {
             'content_type': self.current_content_type,
             'tid': getattr(self, 'current_tid', None),
-            'selected_index': current_selected,
-            'page': current_page,
+            'selected_index': getattr(self, 'saved_list_index', 0),
+            'page': getattr(self, 'current_page', 1),
             'filter_mode': getattr(self, 'filter_mode', None),
             'user_content_mode': getattr(self, 'user_content_mode', None)
         }
