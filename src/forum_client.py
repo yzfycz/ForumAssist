@@ -720,3 +720,195 @@ class ForumClient:
 
         except Exception as e:
             raise Exception(f"编辑帖子失败: {str(e)}")
+
+    def follow_user(self, forum_name, uid):
+        """
+        关注用户
+
+        Args:
+            forum_name: 论坛名称
+            uid: 要关注的用户ID
+
+        Returns:
+            dict: 包含成功状态和错误信息的字典
+        """
+        session = self.auth_manager.get_session(forum_name)
+        if not session:
+            return {"success": False, "error": "无法获取会话信息"}
+
+        forum_config = self.auth_manager.get_user_info(forum_name)
+        if not forum_config:
+            return {"success": False, "error": "无法获取论坛配置"}
+
+        try:
+            forum_url = forum_config.get('url', '')
+            if not forum_url:
+                return {"success": False, "error": "论坛URL为空"}
+
+            follow_url = f"{forum_url.rstrip('/')}/follow-create.htm"
+            params = {
+                "format": "json",
+                "appkey": "24b22d1468",
+                "seckey": "cb433ea43a",
+                "uid": uid
+            }
+
+            # 添加auth参数（如果有的话）
+            user_info = self.auth_manager.get_user_info(forum_name)
+            if user_info:
+                auth = user_info.get('auth')
+                if auth:
+                    params['auth'] = auth
+
+            response = session.get(follow_url, params=params)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('status') == 1:
+                    return {"success": True, "error": None}
+                else:
+                    error_message = result.get('message', '关注失败')
+                    return {"success": False, "error": error_message}
+            else:
+                return {"success": False, "error": f"HTTP错误: {response.status_code}"}
+
+        except Exception as e:
+            return {"success": False, "error": f"网络异常: {str(e)}"}
+
+    def unfollow_user(self, forum_name, uid):
+        """
+        取消关注用户
+
+        Args:
+            forum_name: 论坛名称
+            uid: 要取消关注的用户ID
+
+        Returns:
+            dict: 包含成功状态和错误信息的字典
+        """
+        session = self.auth_manager.get_session(forum_name)
+        if not session:
+            return {"success": False, "error": "无法获取会话信息"}
+
+        forum_config = self.auth_manager.get_user_info(forum_name)
+        if not forum_config:
+            return {"success": False, "error": "无法获取论坛配置"}
+
+        try:
+            forum_url = forum_config.get('url', '')
+            if not forum_url:
+                return {"success": False, "error": "论坛URL为空"}
+
+            unfollow_url = f"{forum_url.rstrip('/')}/follow-delete.htm"
+            params = {
+                "format": "json",
+                "appkey": "24b22d1468",
+                "seckey": "cb433ea43a",
+                "uid": uid
+            }
+
+            # 添加auth参数（如果有的话）
+            user_info = self.auth_manager.get_user_info(forum_name)
+            if user_info:
+                auth = user_info.get('auth')
+                if auth:
+                    params['auth'] = auth
+
+            response = session.get(unfollow_url, params=params)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('status') == 1:
+                    return {"success": True, "error": None}
+                else:
+                    error_message = result.get('message', '取消关注失败')
+                    return {"success": False, "error": error_message}
+            else:
+                return {"success": False, "error": f"HTTP错误: {response.status_code}"}
+
+        except Exception as e:
+            return {"success": False, "error": f"网络异常: {str(e)}"}
+
+    def get_user_following(self, forum_name, uid):
+        """
+        获取用户的关注列表
+
+        Args:
+            forum_name: 论坛名称
+            uid: 用户ID
+
+        Returns:
+            list: 关注列表
+        """
+        session = self.auth_manager.get_session(forum_name)
+        if not session:
+            return []
+
+        forum_config = self.auth_manager.get_user_info(forum_name)
+        if not forum_config:
+            return []
+
+        try:
+            forum_url = forum_config.get('url', '')
+            if not forum_url:
+                return []
+
+            following_url = f"{forum_url.rstrip('/')}/user-friends.htm"
+            params = {
+                "format": "json",
+                "appkey": "24b22d1468",
+                "seckey": "cb433ea43a",
+                "uid": uid
+            }
+
+            response = session.get(following_url, params=params)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('status') == 1:
+                    return result.get('message', [])
+
+        except Exception as e:
+            pass
+
+        return []
+
+    def get_user_followers(self, forum_name, uid):
+        """
+        获取用户的粉丝列表
+
+        Args:
+            forum_name: 论坛名称
+            uid: 用户ID
+
+        Returns:
+            list: 粉丝列表
+        """
+        session = self.auth_manager.get_session(forum_name)
+        if not session:
+            return []
+
+        forum_config = self.auth_manager.get_user_info(forum_name)
+        if not forum_config:
+            return []
+
+        try:
+            forum_url = forum_config.get('url', '')
+            if not forum_url:
+                return []
+
+            followers_url = f"{forum_url.rstrip('/')}/user-fans.htm"
+            params = {
+                "format": "json",
+                "appkey": "24b22d1468",
+                "seckey": "cb433ea43a",
+                "uid": uid
+            }
+
+            response = session.get(followers_url, params=params)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('status') == 1:
+                    return result.get('message', [])
+
+        except Exception as e:
+            pass
+
+        return []
