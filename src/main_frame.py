@@ -13,6 +13,7 @@ from auth_manager import AuthenticationManager
 from forum_client import ForumClient
 from account_manager import AccountManager
 from message_manager import MessageManager, MessageDialog, MessageListDialog
+from audio_player import AudioPlayer
 
 # 创建自定义事件
 AccountSelectedEvent, EVT_ACCOUNT_SELECTED = wx.lib.newevent.NewEvent()
@@ -165,8 +166,13 @@ class MainFrame(wx.Frame):
         # 绑定事件
         self.Bind(EVT_ACCOUNT_SELECTED, self.on_account_selected)
 
+        # 初始化音频播放器（在菜单创建之前）
+        self.init_audio_player()
+
         # 创建UI
         self.create_ui()
+
+        # 创建菜单（现在音频菜单已经可用）
         self.create_menu()
 
         # 设置键盘快捷键
@@ -338,6 +344,10 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
 
         menubar.Append(file_menu, "文件(&F)")
+
+        # 播放菜单
+        if hasattr(self, 'audio_menu_available') and self.audio_menu_available:
+            menubar.Append(self.audio_menu, "播放(&P)")
 
         # 帮助菜单
         help_menu = wx.Menu()
@@ -2868,6 +2878,19 @@ class MainFrame(wx.Frame):
 
                 # 在数据中存储序号信息
                 data['list_number'] = f"{i+1}之{total_items}项"
+
+        # 检测并询问是否播放音频
+        if thread_info and hasattr(self, 'audio_menu_available') and self.audio_menu_available:
+            # 合并所有帖子的内容来检测音频
+            all_content = ""
+            for post in posts:
+                if 'message' in post:
+                    all_content += post['message'] + "\n"
+
+            if all_content.strip():
+                audio_count = self.detect_audio_in_content(all_content)
+                if audio_count > 0:
+                    self.ask_to_play_audio(audio_count)
 
         # 设置焦点到索引0（楼主），确保屏幕阅读器能朗读
         if self.list_ctrl.GetItemCount() > 0:
@@ -5670,415 +5693,413 @@ class MainFrame(wx.Frame):
             self.list_ctrl.SelectRow(index)
             self.list_ctrl.SetFocus()
 
+    # ========== 音频播放功能相关方法 ==========
 
-class UserProfileDialog(wx.Dialog):
-    """增强的用户资料对话框，支持关注、粉丝列表等功能"""
+    def init_audio_player(self):
+        """初始化音频播放器"""
+        try:
+            self.audio_player = AudioPlayer()
 
-    def __init__(self, parent, forum_name, forum_client, username, profile_data):
-        """
-        初始化用户资料对话框
+            if self.audio_player.is_available():
+                print("[OK] Audio playback functionality available")
+                self.setup_audio_menu()
+                self.setup_audio_status_bar()
+                self.setup_audio_hotkeys()
+                self.audio_menu_available = True
+            else:
+                print("[FAIL] 音频播放功能不可用")
+                self.setup_unavailable_audio_menu()
+                self.audio_menu_available = False
 
-        Args:
-            parent: 父窗口
-            forum_name: 论坛名称
-            forum_client: 论坛客户端实例
-            username: 用户名
-            profile_data: 用户资料数据
-        """
-        super().__init__(parent, title=f"用户资料 - {username}", size=(650, 750))
+        except Exception as e:
+            print(f"Audio player initialization exception: {e}")
+            self.setup_unavailable_audio_menu()
+            self.audio_menu_available = False
 
-        self.parent = parent
-        self.forum_name = forum_name
-        self.forum_client = forum_client
-        self.base_username = username
-        self.base_profile_data = profile_data
+    def setup_audio_status_bar(self):
+        """设置音频播放状态栏"""
+        # 创建5个字段的状态栏
+        self.status_bar = self.CreateStatusBar(5)
+        # 设置状态栏宽度，所有字段都自适应宽度
+        self.status_bar.SetStatusWidths([-1, -1, -1, -1, -1])
 
-        # 对话框状态
-        self.dialog_mode = 'profile'  # 'profile' | 'following' | 'followers'
-        self.current_user_id = profile_data.get('uid', 0)
-        self.current_username = username
-        self.current_profile_data = profile_data
+        # 初始化状态栏内容
+        self.update_status_bar_idle()
 
-        # 列表数据
-        self.list_data = []
-        self.list_ctrl = None
+        # 启动状态更新定时器
+        self.start_status_update_timer()
 
-        # 按钮引用
-        self.btn_follow = None
-        self.btn_message = None
-        self.btn_following = None
-        self.btn_followers = None
-        self.btn_back = None
-        self.btn_close = None
+    def update_status_bar_idle(self):
+        """更新空闲状态栏"""
+        self.status_bar.SetStatusText("就绪", 0)
+        self.status_bar.SetStatusText("[无音频播放]", 1)
+        self.status_bar.SetStatusText("", 2)
+        self.status_bar.SetStatusText("", 3)
+        self.status_bar.SetStatusText("Alt+P打开播放菜单", 4)
 
-        # 个人资料控件
-        self.profile_text = None
-        self.profile_panel = None
+    def update_audio_status_bar(self):
+        """更新音频播放状态栏"""
+        if not self.audio_player or (not self.audio_player.is_playing and not self.audio_player.is_paused):
+            self.update_status_bar_idle()
+            return
 
-        self.init_ui()
-        self.CenterOnParent()
+        # 播放状态
+        if self.audio_player.is_paused:
+            self.status_bar.SetStatusText("已暂停", 0)
+        else:
+            self.status_bar.SetStatusText("播放中", 0)
 
-    def init_ui(self):
-        """初始化用户界面"""
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        # 曲目信息
+        current = self.audio_player.current_index + 1
+        total = len(self.audio_player.playlist)
+        track_info = self.audio_player.get_current_track_info()
+        track_name = track_info.get('title', f"音频{current}")
+        self.status_bar.SetStatusText(f"正在播放第{current}个，共{total}个 - {track_name}", 1)
 
-        # 创建个人资料面板
-        self.create_profile_panel()
-        main_sizer.Add(self.profile_panel, 1, wx.EXPAND | wx.ALL, 10)
+        # 进度信息
+        current_time = self.audio_player.current_time
+        total_time = self.audio_player.total_time
+        progress = self.audio_player.get_progress_percentage()
 
-        # 创建列表面板（初始隐藏）
-        self.list_panel = wx.Panel(self)
-        self.list_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.list_panel.SetSizer(self.list_sizer)
-        self.list_panel.Hide()
-        main_sizer.Add(self.list_panel, 1, wx.EXPAND | wx.ALL, 10)
+        time_str = f"已播放：{self.format_time(current_time)} / 总时间：{self.format_time(total_time)}"
+        progress_str = f"进度：{progress:.2f}%"
+        self.status_bar.SetStatusText(f"{time_str} ({progress_str})", 2)
 
-        # 创建按钮区域
-        button_panel = wx.Panel(self)
-        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        # 更新帮助文本
+        self.update_help_text()
 
-        # 创建按钮
-        self.btn_follow = wx.Button(button_panel, label="关注(&F)")
-        self.btn_message = wx.Button(button_panel, label="发送消息(&M)")
-        self.btn_following = wx.Button(button_panel, label="关注列表(&L)")
-        self.btn_followers = wx.Button(button_panel, label="粉丝列表(&S)")
-        self.btn_back = wx.Button(button_panel, label="返回(&B)")
-        self.btn_close = wx.Button(button_panel, label="关闭(&C)")
+    def format_time(self, seconds: int) -> str:
+        """格式化时间显示"""
+        if seconds < 60:
+            return f"{seconds}秒"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            remaining_seconds = seconds % 60
+            return f"{minutes}分{remaining_seconds}秒"
+        else:
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            return f"{hours}小时{minutes}分"
 
-        # 添加按钮到sizer
-        button_sizer.Add(self.btn_follow, 0, wx.ALL, 5)
-        button_sizer.Add(self.btn_message, 0, wx.ALL, 5)
-        button_sizer.Add(self.btn_following, 0, wx.ALL, 5)
-        button_sizer.Add(self.btn_followers, 0, wx.ALL, 5)
-        button_sizer.Add(self.btn_back, 0, wx.ALL, 5)
-        button_sizer.Add(self.btn_close, 0, wx.ALL, 5)
+    def update_help_text(self):
+        """更新操作提示文本"""
+        if self.audio_player and (self.audio_player.is_playing or self.audio_player.is_paused):
+            if self.audio_player.is_paused:
+                self.status_bar.SetStatusText("Ctrl+Home播放，Ctrl+左右快进退", 4)
+            else:
+                self.status_bar.SetStatusText("Ctrl+Home暂停，Ctrl+End停止", 4)
+        else:
+            self.status_bar.SetStatusText("Alt+P打开播放菜单", 4)
 
-        button_panel.SetSizer(button_sizer)
-        main_sizer.Add(button_panel, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+    def setup_audio_menu(self):
+        """设置音频菜单"""
+        # 创建播放菜单
+        self.audio_menu = wx.Menu()
 
-        self.SetSizer(main_sizer)
+        # 选择音频设备子菜单
+        self.audio_device_menu = wx.Menu()
+        self.device_menu_items = []
+        self.build_audio_device_menu()
 
-        # 绑定事件
-        self.bind_events()
-
-        # 初始显示个人资料模式
-        self.update_ui_for_profile_mode()
-
-    def create_profile_panel(self):
-        """创建个人资料面板"""
-        self.profile_panel = wx.Panel(self)
-        profile_sizer = wx.BoxSizer(wx.VERTICAL)
-
-        # 创建资料编辑框
-        self.profile_text = wx.TextCtrl(
-            self.profile_panel,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP | wx.TE_RICH2
+        # 播放/暂停
+        self.play_pause_menu_id = wx.NewId()
+        play_pause_item = self.audio_menu.Append(
+            self.play_pause_menu_id,
+            "播放(&Play)\tCtrl+Home"
         )
 
-        # 为文本框绑定键盘事件
-        self.profile_text.Bind(wx.EVT_KEY_DOWN, self.on_text_key_down)
+        # 停止
+        stop_id = wx.NewId()
+        self.audio_menu.Append(stop_id, "停止(&S)\tCtrl+End")
 
-        # 构建资料显示文本
-        self.update_profile_content()
+        # 分隔线
+        self.audio_menu.AppendSeparator()
 
-        profile_sizer.Add(self.profile_text, 1, wx.EXPAND | wx.ALL, 0)
-        self.profile_panel.SetSizer(profile_sizer)
+        # 上一个
+        prev_id = wx.NewId()
+        self.audio_menu.Append(prev_id, "上一个(&Prev)\tCtrl+PageUp")
 
-    def update_profile_content(self):
-        """更新个人资料显示内容"""
-        profile_lines = []
+        # 下一个
+        next_id = wx.NewId()
+        self.audio_menu.Append(next_id, "下一个(&Next)\tCtrl+PageDown")
 
-        # 资料字段映射 - 根据API实际返回的字段名进行调整
-        field_mapping = [
-            ('用户名', self.current_profile_data.get('username', '')),  # 用户昵称
-            ('争渡号', str(self.current_profile_data.get('uid', ''))),  # 用户ID
-            ('注册时间', self.current_profile_data.get('regdate_fmt', '')),  # 注册时间(格式化)
-            ('级别', self.current_profile_data.get('groupname', '')),  # 用户级别/组名
-            ('最后活跃', self.current_profile_data.get('lastactive_fmt', '')),  # 最后活跃时间
-            ('在线状态', '在线' if self.current_profile_data.get('isonline', 0) else '离线'),  # 在线状态
-            ('主题数', str(self.current_profile_data.get('threads', 0))),  # 发表的主题数
-            ('帖子数', str(self.current_profile_data.get('posts', 0))),  # 发表的帖子数
-            ('我的帖子', str(self.current_profile_data.get('myposts', 0))),  # 用户自己的帖子数
-            ('精华帖数', str(self.current_profile_data.get('digests', 0))),  # 精华帖数
-            ('关注数', str(self.current_profile_data.get('follows', 0))),  # 关注的人数
-            ('粉丝数', str(self.current_profile_data.get('followeds', 0))),  # 粉丝数
-            ('个人主页', self.current_profile_data.get('homepage', '')),  # 个人主页
-            ('在线时长', str(self.current_profile_data.get('onlinetime', 0))),  # 在线时长(秒)
-            ('个人签名', self.current_profile_data.get('sign', '')),  # 个人签名
-            ('签到次数', str(self.current_profile_data.get('attendancenum', 0))),  # 签到次数
-            ('成长值', str(self.current_profile_data.get('attendancecredits', 0))),  # 签到成长值
-            ('小黑点', str(self.current_profile_data.get('black_points', 0))),  # 小黑点数
-            ('头像', '有' if self.current_profile_data.get('avatar', 0) else '无'),  # 是否有头像
-            ('允许改名', '是' if self.current_profile_data.get('allowrename', 0) else '否'),  # 是否允许改名
-            ('在线认证', self.current_profile_data.get('online_auth_expiry_fmt', '')),  # 在线认证到期时间
-            ('关注状态', '已关注' if self.current_profile_data.get('followstatus', 0) else '未关注')  # 当前关注状态
+        # 分隔线
+        self.audio_menu.AppendSeparator()
+
+        # 快退
+        rewind_id = wx.NewId()
+        self.audio_menu.Append(rewind_id, "快退(&Rewind)\tCtrl+Left")
+
+        # 快进
+        forward_id = wx.NewId()
+        self.audio_menu.Append(forward_id, "快进(&Forward)\tCtrl+Right")
+
+        # 分隔线
+        self.audio_menu.AppendSeparator()
+
+        # 音量增加
+        vol_up_id = wx.NewId()
+        self.audio_menu.Append(vol_up_id, "音量增加(&VolUp)\tCtrl+Up")
+
+        # 音量减少
+        vol_down_id = wx.NewId()
+        self.audio_menu.Append(vol_down_id, "音量减少(&VolDown)\tCtrl+Down")
+
+        # 设备选择菜单项
+        self.audio_menu.AppendSubMenu(
+            self.audio_device_menu,
+            "选择音频设备(&D)"
+        )
+
+        # 绑定事件
+        self.Bind(wx.EVT_MENU, self.on_play_pause, id=self.play_pause_menu_id)
+        self.Bind(wx.EVT_MENU, self.on_stop, id=stop_id)
+        self.Bind(wx.EVT_MENU, self.on_previous, id=prev_id)
+        self.Bind(wx.EVT_MENU, self.on_next, id=next_id)
+        self.Bind(wx.EVT_MENU, self.on_rewind, id=rewind_id)
+        self.Bind(wx.EVT_MENU, self.on_forward, id=forward_id)
+        self.Bind(wx.EVT_MENU, self.on_volume_up, id=vol_up_id)
+        self.Bind(wx.EVT_MENU, self.on_volume_down, id=vol_down_id)
+
+    def setup_unavailable_audio_menu(self):
+        """设置不可用的音频菜单"""
+        self.audio_menu = wx.Menu()
+
+        unavailable_id = wx.NewId()
+        unavailable_item = self.audio_menu.Append(
+            unavailable_id,
+            "音频播放功能不可用",
+            "VLC组件缺失或损坏"
+        )
+        unavailable_item.Enable(False)
+
+    def build_audio_device_menu(self):
+        """动态构建音频设备菜单"""
+        # Clear existing menu items
+        for item_list in self.audio_device_menu.GetMenuItems():
+            self.audio_device_menu.Remove(item_list)
+        self.device_menu_items = []
+
+        devices = self.audio_player.get_audio_devices()
+        for i, device in enumerate(devices):
+            item_id = wx.NewId()
+            menu_item = wx.MenuItem(
+                self.audio_device_menu,
+                item_id,
+                device['name'],
+                kind=wx.ITEM_RADIO
+            )
+
+            self.audio_device_menu.Append(menu_item)
+
+            if device.get('is_current', False):
+                menu_item.Check(True)
+
+            self.Bind(wx.EVT_MENU,
+                     lambda evt, dev=device: self.on_device_selected(dev),
+                     id=item_id)
+            self.device_menu_items.append((item_id, device))
+
+    def setup_audio_hotkeys(self):
+        """设置音频快捷键"""
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_audio_key_down)
+
+    def on_audio_key_down(self, event):
+        """处理音频快捷键"""
+        keycode = event.GetKeyCode()
+        control_down = event.ControlDown()
+
+        if not self.audio_menu_available:
+            event.Skip()
+            return
+
+        # 播放/暂停 - Ctrl+行首键（Ctrl+Home）
+        if control_down and keycode == wx.WXK_HOME:
+            self.on_play_pause(event)
+            return
+
+        # 停止 - Ctrl+End
+        if control_down and keycode == wx.WXK_END:
+            self.on_stop(event)
+            return
+
+        # 上一个 - Ctrl+PageUp
+        if control_down and keycode == wx.WXK_PAGEUP:
+            self.on_previous(event)
+            return
+
+        # 下一个 - Ctrl+PageDown
+        if control_down and keycode == wx.WXK_PAGEDOWN:
+            self.on_next(event)
+            return
+
+        # 快退 - Ctrl+左箭头
+        if control_down and keycode == wx.WXK_LEFT:
+            self.on_rewind(event)
+            return
+
+        # 快进 - Ctrl+右箭头
+        if control_down and keycode == wx.WXK_RIGHT:
+            self.on_forward(event)
+            return
+
+        # 音量增加 - Ctrl+上箭头
+        if control_down and keycode == wx.WXK_UP:
+            self.on_volume_up(event)
+            return
+
+        # 音量减少 - Ctrl+下箭头
+        if control_down and keycode == wx.WXK_DOWN:
+            self.on_volume_down(event)
+            return
+
+        event.Skip()
+
+    # 音频控制方法
+    def on_play_pause(self, event=None):
+        """播放/暂停"""
+        self.audio_player.toggle_play_pause()
+        self.update_play_pause_menu_state()
+        self.update_audio_status_bar()
+
+    def on_stop(self, event):
+        """停止"""
+        self.audio_player.stop()
+        self.update_play_pause_menu_state()
+        self.update_audio_status_bar()
+
+    def on_previous(self, event):
+        """上一个"""
+        if not self.audio_player.previous_track():
+            wx.MessageBox("已经是第一首", "提示", wx.OK | wx.ICON_INFORMATION)
+        self.update_audio_status_bar()
+
+    def on_next(self, event):
+        """下一个"""
+        if not self.audio_player.next_track():
+            wx.MessageBox("已经是最后一首", "提示", wx.OK | wx.ICON_INFORMATION)
+        self.update_audio_status_bar()
+
+    def on_rewind(self, event):
+        """快退"""
+        self.audio_player.rewind(10)
+
+    def on_forward(self, event):
+        """快进"""
+        self.audio_player.forward(10)
+
+    def on_volume_up(self, event):
+        """音量增加"""
+        current_vol = self.audio_player.current_volume
+        new_vol = min(100, current_vol + 10)
+        self.audio_player.set_volume(new_vol)
+        self.show_status(f"音量: {new_vol}%")
+
+    def on_volume_down(self, event):
+        """音量减少"""
+        current_vol = self.audio_player.current_volume
+        new_vol = max(0, current_vol - 10)
+        self.audio_player.set_volume(new_vol)
+        self.show_status(f"音量: {new_vol}%")
+
+    def on_device_selected(self, device):
+        """设备选择"""
+        if self.audio_player.set_audio_device(device['id']):
+            self.show_status(f"已切换到: {device['name']}")
+            # 更新菜单选中状态
+            for item_id, dev in self.device_menu_items:
+                menu_item = self.audio_device_menu.FindItemById(item_id)
+                if menu_item:
+                    menu_item.Check(dev['id'] == device['id'])
+        else:
+            wx.MessageBox(f"切换设备失败: {device['name']}", "错误",
+                        wx.OK | wx.ICON_ERROR)
+
+    def update_play_pause_menu_state(self):
+        """更新播放/暂停菜单状态"""
+        if not hasattr(self, 'play_pause_menu_id'):
+            return
+
+        menu_item = self.audio_menu.FindItemById(self.play_pause_menu_id)
+        if menu_item and self.audio_player:
+            if self.audio_player.is_playing and not self.audio_player.is_paused:
+                menu_item.SetItemLabel("暂停(&Pause)\tSpace/Ctrl+Home")
+            else:
+                menu_item.SetItemLabel("播放(&Play)\tSpace/Ctrl+Home")
+
+    def start_status_update_timer(self):
+        """启动状态更新定时器"""
+        if hasattr(self, 'status_timer'):
+            self.status_timer.Stop()
+
+        self.status_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.on_status_timer, self.status_timer)
+        self.status_timer.Start(1000)  # 每秒更新一次
+
+    def on_status_timer(self, event):
+        """状态栏定时器事件"""
+        self.update_audio_status_bar()
+
+    # 音频检测和播放
+    def detect_audio_in_content(self, content: str) -> int:
+        """检测内容中的音频数量"""
+        import re
+
+        audio_list = []
+
+        # 使用现有的音频提取逻辑
+        def extract_audio(match):
+            src = match.group(1)
+            title = match.group(2) if len(match.groups()) > 1 else ""
+
+            if src and src not in [a['url'] for a in audio_list]:
+                audio_list.append({
+                    'url': src,
+                    'title': title or f"音频{len(audio_list)+1}",
+                    'format': 'MP3',  # 默认格式
+                    'bitrate': '待检测'  # 初始为待检测，播放时会更新为实际值
+                })
+            return ""
+
+        # 应用音频提取正则
+        patterns = [
+            r'<audio\s+[^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*title\s*=\s*["\']([^"\']+)["\'][^>]*>.*?</audio>',
+            r'<audio\s+[^>]*title\s*=\s*["\']([^"\']+)["\'][^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*>.*?</audio>',
+            r'<audio\s+[^>]*src\s*=\s*["\']([^"\']+)["\'][^>]*>.*?</audio>'
         ]
 
-        # 添加资料项到文本
-        for label, value in field_mapping:
-            # 基本空值检查 - 只过滤完全空的值
-            if value is None or value == '':
-                continue
+        for pattern in patterns:
+            re.sub(pattern, extract_audio, content, flags=re.IGNORECASE | re.DOTALL)
 
-            # 处理长文本
-            if label == '个人签名' and len(str(value)) > 50:
-                display_value = str(value)[:47] + '...'
-            elif label == '在线时长':
-                # 将秒数转换为小时
-                try:
-                    hours = int(value) // 3600
-                    display_value = f"{hours}小时"
-                except:
-                    display_value = str(value)
-            else:
-                display_value = str(value)
+        # 设置播放列表
+        if hasattr(self, 'audio_player') and self.audio_player:
+            self.audio_player.playlist = audio_list
+            self.audio_player.current_index = 0
 
-            # 添加到文本行
-            profile_lines.append(f"{label}: {display_value}")
+        return len(audio_list)
 
-        if not profile_lines:
-            profile_lines.append("暂无可用资料")
-
-        self.profile_text.SetValue('\n'.join(profile_lines))
-
-    def create_list_panel(self):
-        """创建用户列表面板"""
-        if self.list_ctrl:
-            return  # 已经创建过了
-
-        # 创建列表控件
-        self.list_ctrl = wx.dataview.DataViewListCtrl(self.list_panel)
-        # 设置控件标签
-        self.list_ctrl.SetName("项目")
-        self.list_ctrl.AppendTextColumn("项目", width=400)
-
-        self.list_sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 0)
-
-        # 绑定列表事件
-        self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, self.on_list_selection_changed)
-        self.list_ctrl.Bind(wx.dataview.EVT_DATAVIEW_ITEM_ACTIVATED, self.on_list_item_activated)
-
-        # 为列表控件绑定键盘事件
-        self.list_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_list_key_down)
-
-    def bind_events(self):
-        """绑定事件处理"""
-        self.btn_follow.Bind(wx.EVT_BUTTON, self.on_follow_click)
-        self.btn_message.Bind(wx.EVT_BUTTON, self.on_message_click)
-        self.btn_following.Bind(wx.EVT_BUTTON, self.on_following_click)
-        self.btn_followers.Bind(wx.EVT_BUTTON, self.on_followers_click)
-        self.btn_back.Bind(wx.EVT_BUTTON, self.on_back_click)
-        self.btn_close.Bind(wx.EVT_BUTTON, self.on_close_click)
-
-        # 绑定键盘事件
-        self.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
-
-    def on_follow_click(self, event):
-        """关注/取消关注按钮点击事件"""
-        try:
-            uid = self.current_user_id
-            if not uid:
-                wx.MessageBox("无法获取用户ID", "错误", wx.OK | wx.ICON_ERROR)
-                return
-
-            # 检查当前关注状态
-            is_following = self.current_profile_data.get('followstatus', 0) == 1
-
-            if is_following:
-                # 取消关注
-                result = self.forum_client.unfollow_user(self.forum_name, uid)
-                if result['success']:
-                    wx.MessageBox("取消关注成功", "成功", wx.OK | wx.ICON_INFORMATION)
-                    # 更新关注状态
-                    self.current_profile_data['followstatus'] = 0
-                    self.btn_follow.SetLabel("关注(&F)")
-                    self.update_profile_content()
-                else:
-                    wx.MessageBox(f"取消关注失败: {result['error']}", "错误", wx.OK | wx.ICON_ERROR)
-            else:
-                # 关注
-                result = self.forum_client.follow_user(self.forum_name, uid)
-                if result['success']:
-                    wx.MessageBox("关注成功", "成功", wx.OK | wx.ICON_INFORMATION)
-                    # 更新关注状态
-                    self.current_profile_data['followstatus'] = 1
-                    self.btn_follow.SetLabel("取消关注(&U)")
-                    self.update_profile_content()
-                else:
-                    wx.MessageBox(f"关注失败: {result['error']}", "错误", wx.OK | wx.ICON_ERROR)
-
-        except Exception as e:
-            wx.MessageBox(f"操作失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
-
-    def on_message_click(self, event):
-        """发送消息按钮点击事件"""
-        # 暂时使用浏览器打开论坛私信页面的备选方案
-        wx.MessageBox("私信功能暂未实现，请通过论坛网页版发送消息", "提示", wx.OK | wx.ICON_INFORMATION)
-
-    def on_following_click(self, event):
-        """关注列表按钮点击事件"""
-        self.switch_to_list_mode('following')
-
-    def on_followers_click(self, event):
-        """粉丝列表按钮点击事件"""
-        self.switch_to_list_mode('followers')
-
-    def on_back_click(self, event):
-        """返回按钮点击事件"""
-        self.switch_to_profile_mode()
-
-    def on_close_click(self, event):
-        """关闭按钮点击事件"""
-        self.Close()
-
-    def on_key_down(self, event):
-        """键盘事件处理"""
-        key_code = event.GetKeyCode()
-        if key_code == wx.WXK_ESCAPE or key_code == wx.WXK_BACK:
-            self.Close()
+    def ask_to_play_audio(self, audio_count: int):
+        """询问是否播放检测到的音频"""
+        if not self.audio_menu_available:
             return
-        event.Skip()
 
-    def on_text_key_down(self, event):
-        """文本框键盘事件处理"""
-        key_code = event.GetKeyCode()
-        if key_code == wx.WXK_ESCAPE or key_code == wx.WXK_BACK:
-            self.Close()
-            return
-        event.Skip()
+        message = f"检测到 {audio_count} 个音频文件，是否开始播放？"
+        dlg = wx.MessageDialog(
+            self, message, "发现音频",
+            wx.YES_NO | wx.ICON_QUESTION
+        )
 
-    def on_list_key_down(self, event):
-        """列表控件键盘事件处理"""
-        key_code = event.GetKeyCode()
-        if key_code == wx.WXK_ESCAPE:
-            self.Close()
-            return
-        elif key_code == wx.WXK_BACK:
-            # 在列表模式下，退格键返回到个人资料模式
-            if self.dialog_mode in ['following', 'followers']:
-                self.switch_to_profile_mode()
-                return
-            else:
-                self.Close()
-                return
-        event.Skip()
+        result = dlg.ShowModal()
+        dlg.Destroy()
 
-    def on_list_selection_changed(self, event):
-        """列表选择变化事件"""
-        pass
+        if result == wx.ID_YES:
+            # 开始播放第一个音频
+            self.on_play_pause()
 
-    def on_list_item_activated(self, event):
-        """列表项激活事件（回车键或双击）"""
-        if self.dialog_mode in ['following', 'followers']:
-            selected_row = self.list_ctrl.GetSelectedRow()
-            if selected_row != -1 and selected_row < len(self.list_data):
-                item_data = self.list_data[selected_row]
-                user_id = item_data.get('uid')
-                username = item_data.get('username', '')
-                if user_id and username:
-                    # 获取该用户的资料并切换到个人资料模式
-                    try:
-                        profile_data = self.forum_client.get_user_profile(self.forum_name, user_id)
-                        self.current_user_id = user_id
-                        self.current_username = username
-                        self.current_profile_data = profile_data
-                        self.switch_to_profile_mode()
-                    except Exception as e:
-                        wx.MessageBox(f"获取用户资料失败: {str(e)}", "错误", wx.OK | wx.ICON_ERROR)
+    def show_status(self, message: str):
+        """在状态栏显示临时消息"""
+        if hasattr(self, 'status_bar'):
+            self.status_bar.SetStatusText(message, 0)
+            # 2秒后恢复
+            wx.CallLater(2000, self.update_audio_status_bar)
 
-    def switch_to_profile_mode(self):
-        """切换到个人资料模式"""
-        self.dialog_mode = 'profile'
-        self.SetTitle(f"用户资料 - {self.current_username}")
-        self.update_ui_for_profile_mode()
-
-    def switch_to_list_mode(self, list_type):
-        """切换到列表模式"""
-        try:
-            self.dialog_mode = list_type
-
-            # 创建列表面板
-            self.create_list_panel()
-
-            # 加载数据
-            if list_type == 'following':
-                self.SetTitle("项目列表")
-                user_list = self.forum_client.get_user_following(self.forum_name, self.current_user_id)
-            else:  # followers
-                self.SetTitle("项目列表")
-                user_list = self.forum_client.get_user_followers(self.forum_name, self.current_user_id)
-
-            # 更新列表数据
-            self.list_data = []
-            self.list_ctrl.DeleteAllItems()
-
-            for user in user_list:
-                username = user.get('username', '')
-                uid = user.get('uid', 0)
-                if username and uid:
-                    display_text = f"{username} (争渡号:{uid})"
-                    self.list_ctrl.AppendItem([display_text])
-                    self.list_data.append({
-                        'type': 'user',
-                        'uid': uid,
-                        'username': username,
-                        'display_text': display_text
-                    })
-
-            self.update_ui_for_list_mode()
-
-        except Exception as e:
-            wx.MessageBox(f"加载{list_type == 'following' and '关注列表' or '粉丝列表'}失败: {str(e)}",
-                        "错误", wx.OK | wx.ICON_ERROR)
-            self.switch_to_profile_mode()
-
-    def update_ui_for_profile_mode(self):
-        """更新个人资料模式的UI"""
-        # 显示个人资料面板
-        self.profile_panel.Show()
-        if self.list_panel:
-            self.list_panel.Hide()
-
-        # 更新关注按钮状态
-        is_following = self.current_profile_data.get('followstatus', 0) == 1
-        self.btn_follow.SetLabel("取消关注(&U)" if is_following else "关注(&F)")
-
-        # 显示个人资料相关按钮
-        self.btn_follow.Show()
-        self.btn_message.Show()
-        self.btn_following.Show()
-        self.btn_followers.Show()
-        self.btn_back.Hide()
-        self.btn_close.Show()
-
-        # 更新资料内容
-        self.update_profile_content()
-
-        # 刷新布局
-        self.Layout()
-
-        # 设置焦点到资料文本框
-        self.profile_text.SetFocus()
-
-    def update_ui_for_list_mode(self):
-        """更新列表模式的UI"""
-        # 隐藏个人资料面板
-        self.profile_panel.Hide()
-        if self.list_panel:
-            self.list_panel.Show()
-
-        # 隐藏个人资料相关按钮，显示返回按钮
-        self.btn_follow.Hide()
-        self.btn_message.Hide()
-        self.btn_following.Hide()
-        self.btn_followers.Hide()
-        self.btn_back.Show()
-        self.btn_close.Show()
-
-        # 刷新布局
-        self.Layout()
-
-        # 设置焦点到列表
-        if self.list_ctrl and self.list_ctrl.GetItemCount() > 0:
-            self.list_ctrl.SelectRow(0)
-            self.list_ctrl.SetFocus()

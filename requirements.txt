@@ -3,3 +3,5 @@ beautifulsoup4>=4.11.0
 wxPython>=4.2.0
 cryptography>=3.4.8
 configparser>=5.3.0
+python-vlc>=3.0.18121
+pywin32>=306
