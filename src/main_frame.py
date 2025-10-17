@@ -6093,8 +6093,14 @@ class MainFrame(wx.Frame):
         dlg.Destroy()
 
         if result == wx.ID_YES:
-            # 开始播放第一个音频
-            self.on_play_pause()
+            # 直接播放新检测到的音频，不使用toggle_play_pause避免暂停当前播放
+            if hasattr(self, 'audio_player') and self.audio_player:
+                # 停止当前播放，重置播放列表，开始播放新音频
+                self.audio_player.stop()
+                self.audio_player.current_index = 0
+                self.audio_player.play_current_track()
+                self.update_play_pause_menu_state()
+                self.update_audio_status_bar()
 
     def show_status(self, message: str):
         """在状态栏显示临时消息"""
