@@ -5706,6 +5706,8 @@ class MainFrame(wx.Frame):
 
             if self.audio_player.is_available():
                 print("[OK] Audio playback functionality available")
+                # 设置状态更新回调
+                self.audio_player.on_status_update = self.update_audio_status_bar
                 self.setup_audio_menu()
                 self.setup_audio_status_bar()
                 self.setup_audio_hotkeys()

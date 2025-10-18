@@ -18,6 +18,8 @@ class AudioPlayer:
         self.total_time = 0
         self.current_time = 0
         self.update_timer = None
+        # 状态更新回调
+        self.on_status_update = None
 
         self.setup_vlc()
 
@@ -233,6 +235,11 @@ class AudioPlayer:
 
             # 启动更新定时器
             self.start_update_timer()
+
+            # 立即触发状态更新回调（在音频开始播放前）
+            if self.on_status_update:
+                self.on_status_update()
+
             return True
         except Exception as e:
             print(f"播放失败: {e}")
@@ -252,6 +259,10 @@ class AudioPlayer:
                 except Exception as reinit_e:
                     print(f"重新初始化失败: {reinit_e}")
 
+            # 播放失败时也触发状态更新回调
+            if self.on_status_update:
+                self.on_status_update()
+
             return False
 
     def toggle_play_pause(self):
@@ -259,9 +270,15 @@ class AudioPlayer:
         if self.is_paused:
             self.player.play()
             self.is_paused = False
+            # 触发状态更新回调
+            if self.on_status_update:
+                self.on_status_update()
         elif self.is_playing:
             self.player.pause()
             self.is_paused = True
+            # 触发状态更新回调
+            if self.on_status_update:
+                self.on_status_update()
         else:
             # 开始播放当前曲目
             self.play_current_track()
@@ -275,6 +292,9 @@ class AudioPlayer:
         self.current_index = 0
         self.current_time = 0
         self.stop_update_timer()
+        # 触发状态更新回调
+        if self.on_status_update:
+            self.on_status_update()
 
     def next_track(self) -> bool:
         """播放下一首"""
