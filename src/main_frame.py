@@ -672,15 +672,19 @@ class MainFrame(wx.Frame):
         elif keycode == wx.WXK_HOME:
             # Home键：移动到第一个项目
             self.move_to_first_item()
+            event.Skip()
         elif keycode == wx.WXK_END:
             # End键：移动到最后一个项目
             self.move_to_last_item()
+            event.Skip()
         elif keycode == wx.WXK_PAGEUP:
             # PageUp键：向上翻页
             self.move_page_up()
+            event.Skip()
         elif keycode == wx.WXK_PAGEDOWN:
             # PageDown键：向下翻页
             self.move_page_down()
+            event.Skip()
         else:
             # 其他按键：默认处理
             event.Skip()
@@ -5909,50 +5913,50 @@ class MainFrame(wx.Frame):
         keycode = event.GetKeyCode()
         control_down = event.ControlDown()
 
+        # 只有在音频功能可用时才处理音频相关的按键
         if not self.audio_menu_available:
             event.Skip()
             return
 
-        # 播放/暂停 - Ctrl+行首键（Ctrl+Home）
-        if control_down and keycode == wx.WXK_HOME:
+        # 明确只处理Ctrl组合键的音频快捷键，避免与系统快捷键冲突
+        if keycode == wx.WXK_HOME:
+            # 单独的Home键交给系统/控件处理
+            if not control_down:
+                event.Skip()
+                return
+            # Ctrl+Home: 播放/暂停
             self.on_play_pause(event)
             return
-
-        # 停止 - Ctrl+End
-        if control_down and keycode == wx.WXK_END:
+        elif control_down and keycode == wx.WXK_END:
+            # 停止 - Ctrl+End
             self.on_stop(event)
             return
-
-        # 上一个 - Ctrl+PageUp
-        if control_down and keycode == wx.WXK_PAGEUP:
+        elif control_down and keycode == wx.WXK_PAGEUP:
+            # 上一个 - Ctrl+PageUp
             self.on_previous(event)
             return
-
-        # 下一个 - Ctrl+PageDown
-        if control_down and keycode == wx.WXK_PAGEDOWN:
+        elif control_down and keycode == wx.WXK_PAGEDOWN:
+            # 下一个 - Ctrl+PageDown
             self.on_next(event)
             return
-
-        # 快退 - Ctrl+左箭头
-        if control_down and keycode == wx.WXK_LEFT:
+        elif control_down and keycode == wx.WXK_LEFT:
+            # 快退 - Ctrl+左箭头
             self.on_rewind(event)
             return
-
-        # 快进 - Ctrl+右箭头
-        if control_down and keycode == wx.WXK_RIGHT:
+        elif control_down and keycode == wx.WXK_RIGHT:
+            # 快进 - Ctrl+右箭头
             self.on_forward(event)
             return
-
-        # 音量增加 - Ctrl+上箭头
-        if control_down and keycode == wx.WXK_UP:
+        elif control_down and keycode == wx.WXK_UP:
+            # 音量增加 - Ctrl+上箭头
             self.on_volume_up(event)
             return
-
-        # 音量减少 - Ctrl+下箭头
-        if control_down and keycode == wx.WXK_DOWN:
+        elif control_down and keycode == wx.WXK_DOWN:
+            # 音量减少 - Ctrl+下箭头
             self.on_volume_down(event)
             return
 
+        # 其他键传递给默认处理
         event.Skip()
 
     # 音频控制方法
@@ -6023,9 +6027,9 @@ class MainFrame(wx.Frame):
         menu_item = self.audio_menu.FindItemById(self.play_pause_menu_id)
         if menu_item and self.audio_player:
             if self.audio_player.is_playing and not self.audio_player.is_paused:
-                menu_item.SetItemLabel("暂停(&Pause)\tSpace/Ctrl+Home")
+                menu_item.SetItemLabel("暂停(&Pause)\tCtrl+Home")
             else:
-                menu_item.SetItemLabel("播放(&Play)\tSpace/Ctrl+Home")
+                menu_item.SetItemLabel("播放(&Play)\tCtrl+Home")
 
     def start_status_update_timer(self):
         """启动状态更新定时器"""
